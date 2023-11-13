@@ -27,12 +27,7 @@ import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 
 import org.forgerock.openam.annotations.sm.Attribute;
-import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
-import org.forgerock.openam.auth.node.api.Action;
-import org.forgerock.openam.auth.node.api.Node;
-import org.forgerock.openam.auth.node.api.NodeProcessException;
-import org.forgerock.openam.auth.node.api.StaticOutcomeProvider;
-import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.node.api.*;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,6 +100,8 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
               logger.debug(loggerPrefix + "Node started");
             }
 
+            NodeState ns = context.getStateFor(this);
+            ns.putShared("PingOneProtectInit","true");
 
             Optional<String> result = context.getCallback(HiddenValueCallback.class).map(HiddenValueCallback::getValue).filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
 

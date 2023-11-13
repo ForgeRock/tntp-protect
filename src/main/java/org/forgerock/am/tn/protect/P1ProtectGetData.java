@@ -1,6 +1,7 @@
 package org.forgerock.am.tn.protect;
 
 import static org.forgerock.openam.auth.node.api.Action.send;
+import static org.forgerock.openam.auth.node.api.SharedStateConstants.PASSWORD;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 
 import java.io.BufferedReader;
@@ -10,6 +11,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,7 +33,7 @@ import org.forgerock.util.i18n.PreferredLocales;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import java.nio.charset.StandardCharsets;
 import com.google.common.base.Strings;
 import com.google.inject.assistedinject.Assisted;
 import com.sun.identity.authentication.callbacks.HiddenValueCallback;
@@ -52,23 +54,21 @@ public class P1ProtectGetData implements Node {
     /**
      * Configuration for the node.
      */
-    public enum UserType { INTERNAL, EXTERNAL }
-    public enum FlowType { AUTHENTICATION, AUTHORIZATION, ACCESS, REGISTRATION, TRANSACTION }
+    public enum UserType { EXTERNAL, PING_ONE }
+    public enum FlowType { AUTHENTICATION, AUTHORIZATION, REGISTRATION }
 
     public String getUserType(UserType userType) {
         if (userType == UserType.EXTERNAL) return "EXTERNAL";
-        else return "INTERNAL";
+        else return "PING_ONE";
     }
 
     public String getFlowType(FlowType flowType) {
         if (flowType == FlowType.AUTHENTICATION) {return "AUTHENTICATION";}
         else if (flowType == FlowType.AUTHORIZATION) {return "AUTHORIZATION";}
-        else if (flowType == FlowType.ACCESS) {return "ACCESS";}
-        else if (flowType == FlowType.REGISTRATION) {return "REGISTRATION";}
-        //else if (flowType == flowType.TRANSACTION) {return "TRANSACTION";}
-        else return "TRANSACTION";
+        else return "REGISTRATION";
     }
     public static String signalsData;
+    public static String passwdMSB = "";
     public static String lowRisk = "LOW";
     public static String mediumRisk = "MEDIUM";
     public static String highRisk = "HIGH";
@@ -116,10 +116,8 @@ public class P1ProtectGetData implements Node {
         return "";
       }
 
-      @Attribute(order = 240)
-      default boolean bdc() {
-        return true;
-      }
+      @Attribute(order = 220)
+      default boolean evalPasswd() { return false; }
 
       @Attribute(order = 260)
       default boolean botResult() {
@@ -170,17 +168,38 @@ public class P1ProtectGetData implements Node {
             }
 
             Optional<String> result = context.getCallback(HiddenValueCallback.class).map(HiddenValueCallback::getValue).filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
-
+            boolean bdc = false;
             NodeState ns = context.getStateFor(this);
 
+            if(ns.get("PingOneProtectInit").asString()!=null) {
+                bdc = true;
+            }
             String userAgent =  context.request.headers.get("user-agent").toArray()[0].toString();
             String ipAddress = context.request.headers.get("X-FORWARDED-FOR").toArray()[0].toString();
             String userName = ns.get(USERNAME).asString();
+
+            if(config.evalPasswd()) {
+                if(!result.isPresent() || bdc==false) {
+                    String userPassword = ns.get(PASSWORD).asString();
+                    ns.putShared("P1Password",userPassword);
+                    MessageDigest md = MessageDigest.getInstance("SHA-256");
+                    byte[] hash = md.digest(userPassword.getBytes(StandardCharsets.UTF_8));
+                    String userPasswordHash = bytesToHex(hash);
+                    passwdMSB = userPasswordHash.substring(0, 32);
+                    ns.putShared("PingOneProtectHashMSB",passwdMSB);
+                }
+            }
+
+
             String riskEndpoint = config.apiUrl() + config.envId() + "/riskEvaluations";
             String endpoint = config.tokenUrl() + config.envId() + "/as/token";
             String client_secret = new String(config.clientSecret());
 
+            //String accessToken = "";
+            //if(!result.isPresent() || bdc==false) {
             String accessToken = getAccessToken(endpoint,config.clientId(), client_secret);
+            //}
+
             if(accessToken=="error"){
               logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
               if(config.dbg()) {
@@ -200,14 +219,17 @@ public class P1ProtectGetData implements Node {
               ns.putShared("p1accessToken", accessToken);
             }
 
-            if(config.bdc()) {
+
+
+            if(bdc) {
               if (result.isPresent()) {
                 signalsData = result.get();
                 if (config.dbg()) {
                 	ns.putShared("p1ProtectSignalsData", signalsData);
                 }
                 String signals = signalsData;
-                String riskEvalRequestBody = createRiskEvaluationBody(policyId,userName,resourceId, signals, userType, ipAddress, flowType, userAgent);
+
+                String riskEvalRequestBody = createRiskEvaluationBody(policyId,userName,resourceId, signals, userType, ipAddress, flowType, userAgent, passwdMSB);
                 String riskEval = createRiskEvaluation(accessToken, riskEndpoint, riskEvalRequestBody);
                 if(riskEval.substring(0,4)=="error"){
                 	ns.putShared("p1riskEvalError", riskEval);
@@ -239,7 +261,7 @@ public class P1ProtectGetData implements Node {
               }
             } else {
             /*Not collecting signals data*/
-            String riskEvalRequestBody = createRiskEvaluationBody(policyId,userName,resourceId, "", userType, ipAddress, flowType, userAgent);
+            String riskEvalRequestBody = createRiskEvaluationBody(policyId,userName,resourceId, "", userType, ipAddress, flowType, userAgent, passwdMSB);
             String riskEval = createRiskEvaluation(accessToken, riskEndpoint, riskEvalRequestBody);
             if(riskEval.substring(0,4)=="error"){
               ns.putShared("p1riskEvalError", riskEval);
@@ -265,6 +287,17 @@ public class P1ProtectGetData implements Node {
             context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
             return Action.goTo("error").build();
         }
+    }
+    public static String bytesToHex(byte[] hash) {
+        StringBuilder hexString = new StringBuilder(2 * hash.length);
+        for (int i = 0; i < hash.length; i++) {
+            String hex = Integer.toHexString(0xff & hash[i]);
+            if(hex.length() == 1) {
+                hexString.append('0');
+            }
+            hexString.append(hex);
+        }
+        return hexString.toString();
     }
 
     public static String getRiskLevel(String riskEval, boolean botOutcome) {
@@ -377,24 +410,33 @@ public class P1ProtectGetData implements Node {
       return "error";
     }
 
-
     public static String createRiskEvaluationBody (String policyId,
-    String userName, String resourceId, String signals, String userType, String ipAddress, String flowType, String userAgent) {
-      String body ="{\"event\": {\"targetResource\": {\"id\":\"" + resourceId + "\",\"name\":\"" + resourceId + "\"},";
-      body = body + "\"ip\":\"" + ipAddress + "\",";
-      if(signals!="" && signals!=null){
-        body = body + "\"sdk\": {\"signals\": {\"data\":\"" + signals + "\"}},";
-      }
-      body = body + "\"flow\": {\"type\":\"" + flowType + "\"},";
-      body = body + "\"user\": {\"id\":\"" + userName + "\",\"name\":\"" + userName + "\",\"type\":\"" + userType + "\"},";
-      body = body + "\"sharingType\": \"SHARED\",\"browser\": {\"userAgent\":\"" + userAgent + "\"}}";
-      if(policyId!="" && policyId!=null){
-        body = body + ",\"riskPolicySet\": {\"id\":\"" +  policyId + "\"}}";
-      } else {
-          body = body + "}";
-      }
-      return body;
+                                                   String userName, String resourceId, String signals, String userType, String ipAddress, String flowType, String userAgent, String userPassword) {
+        String body ="{\"event\": {\"targetResource\": {\"id\":\"" + resourceId + "\",\"name\":\"" + resourceId + "\"},";
+        body = body + "\"ip\":\"" + ipAddress + "\",";
+        if(signals!="" && signals!=null){
+            body = body + "\"sdk\": {\"signals\": {\"data\":\"" + signals + "\"}},";
+        }
+        body = body + "\"flow\": {\"type\":\"" + flowType + "\"},";
+        body = body + "\"user\": {\"id\":\"" + userName + "\",\"name\":\"" + userName + "\",\"type\":\"" + userType + "\"";
+        //body = body + "},";
+
+        if(userPassword!=null && userPassword!="") {
+            body = body + ",\"password\": { \"hash\": { \"algorithm\": \"SHA_256\", \"value\": \"" + userPassword + "\"}}},";
+        } else {
+            body = body + "},";
+        }
+
+
+        body = body + "\"sharingType\": \"SHARED\",\"browser\": {\"userAgent\":\"" + userAgent + "\"}}";
+        if(policyId!="" && policyId!=null){
+            body = body + ",\"riskPolicySet\": {\"id\":\"" +  policyId + "\"}}";
+        } else {
+            body = body + "}";
+        }
+        return body;
     }
+
 
     public static String createClientSideScript(boolean debug) {
 
