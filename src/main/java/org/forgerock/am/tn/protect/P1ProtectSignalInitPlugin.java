@@ -20,9 +20,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
+
 import org.forgerock.openam.auth.node.api.AbstractNodeAmPlugin;
 import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.plugins.PluginException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Definition of an <a href="https://backstage.forgerock.com/docs/am/6/apidocs/org/forgerock/openam/auth/node/api/AbstractNodeAmPlugin.html">AbstractNodeAmPlugin</a>. 
@@ -56,8 +59,12 @@ import org.forgerock.openam.plugins.PluginException;
  */
 public class P1ProtectSignalInitPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "1.0.0";
+	static private String currentVersion = "0.0.11";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
+	private final Logger logger = LoggerFactory.getLogger(P1ProtectSignalInitPlugin.class);
+
+	   private String loggerPrefix = "[P1ProtectSignalInitPlugin]" + P1ProtectSignalInitPlugin.logAppender;
+
 	
     /** 
      * Specify the Map of list of node classes that the plugin is providing. These will then be installed and
@@ -105,6 +112,16 @@ public class P1ProtectSignalInitPlugin extends AbstractNodeAmPlugin {
      */	
 	@Override
 	public void upgrade(String fromVersion) throws PluginException {
+		
+		logger.error(loggerPrefix + "fromVersion = " + fromVersion);
+		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
+		try {
+			pluginTools.upgradeAuthNode(P1ProtectGetData.class);
+			pluginTools.upgradeAuthNode(P1ProtectSignalInit.class);
+			pluginTools.upgradeAuthNode(P1ProtectResult.class);
+		} catch (Exception e) {
+			throw new PluginException(e.getMessage());
+		}
 		super.upgrade(fromVersion);
 	}
 

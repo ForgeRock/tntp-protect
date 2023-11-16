@@ -23,7 +23,7 @@
     <artifactId>protect</artifactId>
 
     <groupId>org.forgerock.am.tn</groupId>
-    <version>0.0.1</version>    
+    <version>0.0.11</version>    
     <name>Template for an Auth Tree Node maven project</name>
     <description>An Authentication Tree Node for ForgeRock's Identity Platform</description>
 
