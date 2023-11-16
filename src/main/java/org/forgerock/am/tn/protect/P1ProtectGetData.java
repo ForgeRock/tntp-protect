@@ -55,13 +55,19 @@ public class P1ProtectGetData implements Node {
      * Configuration for the node.
      */
     public enum UserType { EXTERNAL, PING_ONE }
+    public enum ProtectRegion { EU, US, APAC, CANADA }
     public enum FlowType { AUTHENTICATION, AUTHORIZATION, REGISTRATION }
 
     public String getUserType(UserType userType) {
         if (userType == UserType.EXTERNAL) return "EXTERNAL";
         else return "PING_ONE";
     }
-
+    public String getProtectRegion(ProtectRegion protectRegion) {
+        if (protectRegion == ProtectRegion.EU) { return "eu";}
+        else if (protectRegion == ProtectRegion.APAC) { return "asia";}
+        else if (protectRegion == ProtectRegion.CANADA) { return "ca";}
+        else return "com";
+    }
     public String getFlowType(FlowType flowType) {
         if (flowType == FlowType.AUTHENTICATION) {return "AUTHENTICATION";}
         else if (flowType == FlowType.AUTHORIZATION) {return "AUTHORIZATION";}
@@ -78,12 +84,12 @@ public class P1ProtectGetData implements Node {
     public interface Config {
 
       @Attribute(order = 60)
-         default UserType userType() {
+      default UserType userType() {
              return UserType.EXTERNAL;
       }
 
       @Attribute(order = 70)
-         default FlowType flowType() {
+      default FlowType flowType() {
              return FlowType.AUTHENTICATION;
       }
 
@@ -102,8 +108,8 @@ public class P1ProtectGetData implements Node {
        char[] clientSecret();
 
       @Attribute(order = 160)
-      default String apiUrl() {
-        return "";
+      default ProtectRegion protectRegion() {
+          return ProtectRegion.EU;
       }
 
       @Attribute(order = 180)
@@ -129,17 +135,10 @@ public class P1ProtectGetData implements Node {
         return true;
       }
 
-      @Attribute(order = 300)
-      default boolean useShared() {
-        return false;
-      }
-
       @Attribute(order = 320)
       default boolean dbg() {
         return false;
       }
-
-
 
     }
 
@@ -178,28 +177,28 @@ public class P1ProtectGetData implements Node {
             String ipAddress = context.request.headers.get("X-FORWARDED-FOR").toArray()[0].toString();
             String userName = ns.get(USERNAME).asString();
 
+            String riskEndpoint = "https://api.pingone." + config.protectRegion().toString() + "/v1/environments/" + config.envId() + "/riskEvaluations";
+
+            String endpoint = config.tokenUrl() + config.envId() + "/as/token";
+            String client_secret = new String(config.clientSecret());
+            String userType = config.userType().toString();
+            String resourceId = "endUserUI";
+            String policyId = config.policyId();
+            String flowType = config.flowType().toString();
+
             if(config.evalPasswd()) {
                 if(!result.isPresent() || bdc==false) {
                     String userPassword = ns.get(PASSWORD).asString();
-                    ns.putShared("P1Password",userPassword);
-                    MessageDigest md = MessageDigest.getInstance("SHA-256");
-                    byte[] hash = md.digest(userPassword.getBytes(StandardCharsets.UTF_8));
-                    String userPasswordHash = bytesToHex(hash);
-                    passwdMSB = userPasswordHash.substring(0, 32);
-                    ns.putShared("PingOneProtectHashMSB",passwdMSB);
+                    if(userPassword!=null && userPassword!="") {
+                        MessageDigest md = MessageDigest.getInstance("SHA-256");
+                        byte[] hash = md.digest(userPassword.getBytes(StandardCharsets.UTF_8));
+                        String userPasswordHash = bytesToHex(hash);
+                        passwdMSB = userPasswordHash.substring(0, 32);
+                    }
                 }
             }
 
-
-            String riskEndpoint = config.apiUrl() + config.envId() + "/riskEvaluations";
-            String endpoint = config.tokenUrl() + config.envId() + "/as/token";
-            String client_secret = new String(config.clientSecret());
-
-            //String accessToken = "";
-            //if(!result.isPresent() || bdc==false) {
             String accessToken = getAccessToken(endpoint,config.clientId(), client_secret);
-            //}
-
             if(accessToken=="error"){
               logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
               if(config.dbg()) {
@@ -207,19 +206,9 @@ public class P1ProtectGetData implements Node {
               }
               return Action.goTo("error").build();
             }
-            String userType = config.userType().toString();
-            String resourceId = "endUserUI";
-            String policyId = config.policyId();
-            String flowType = config.flowType().toString();
 
             ns.putShared("p1riskEndpoint", riskEndpoint);
-            if(config.useShared()){
-              ns.putShared("p1accessToken", accessToken);
-            } else {
-              ns.putShared("p1accessToken", accessToken);
-            }
-
-
+            ns.putShared("p1accessToken", accessToken);
 
             if(bdc) {
               if (result.isPresent()) {
@@ -419,15 +408,11 @@ public class P1ProtectGetData implements Node {
         }
         body = body + "\"flow\": {\"type\":\"" + flowType + "\"},";
         body = body + "\"user\": {\"id\":\"" + userName + "\",\"name\":\"" + userName + "\",\"type\":\"" + userType + "\"";
-        //body = body + "},";
-
         if(userPassword!=null && userPassword!="") {
             body = body + ",\"password\": { \"hash\": { \"algorithm\": \"SHA_256\", \"value\": \"" + userPassword + "\"}}},";
         } else {
             body = body + "},";
         }
-
-
         body = body + "\"sharingType\": \"SHARED\",\"browser\": {\"userAgent\":\"" + userAgent + "\"}}";
         if(policyId!="" && policyId!=null){
             body = body + ",\"riskPolicySet\": {\"id\":\"" +  policyId + "\"}}";
