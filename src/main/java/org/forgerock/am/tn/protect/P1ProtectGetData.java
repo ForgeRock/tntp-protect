@@ -446,20 +446,20 @@ public class P1ProtectGetData implements Node {
 		String body = "{\"event\": {\"targetResource\": {\"id\":\"" + resourceId + "\",\"name\":\"" + resourceId
 				+ "\"},";
 		body = body + "\"ip\":\"" + ipAddress + "\",";
-		if (signals != "" && signals != null) {
+		if (!Objects.equals(signals, "") && signals != null) {
 			body = body + "\"sdk\": {\"signals\": {\"data\":\"" + signals + "\"}},";
 		}
 		body = body + "\"flow\": {\"type\":\"" + flowType + "\"},";
 		body = body + "\"user\": {\"id\":\"" + userName + "\",\"name\":\"" + userName + "\",\"type\":\"" + userType
 				+ "\"";
-		if (userPassword != null && userPassword != "") {
+		if (userPassword != null && !userPassword.equals("")) {
 			body = body + ",\"password\": { \"hash\": { \"algorithm\": \"SHA_256\", \"value\": \"" + userPassword
 					+ "\"}}},";
 		} else {
 			body = body + "},";
 		}
 		body = body + "\"sharingType\": \"SHARED\",\"browser\": {\"userAgent\":\"" + userAgent + "\"}}";
-		if (policyId != "" && policyId != null) {
+		if (!Objects.equals(policyId, "") && policyId != null) {
 			body = body + ",\"riskPolicySet\": {\"id\":\"" + policyId + "\"}}";
 		} else {
 			body = body + "}";
