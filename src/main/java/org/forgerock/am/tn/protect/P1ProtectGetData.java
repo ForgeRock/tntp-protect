@@ -10,13 +10,11 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
@@ -145,9 +143,12 @@ public class P1ProtectGetData implements Node {
 		}
 
 		@Attribute(order = 260)
+		List<String> advice();
+
+		/*
 		default boolean botResult() {
 			return true;
-		}
+		}*/
 
 		@Attribute(order = 280)
 		default boolean apiResponse() {
@@ -209,28 +210,38 @@ public class P1ProtectGetData implements Node {
 			String flowType = config.flowType().toString();
 
 			if (config.evalPasswd()) {
-				if (!result.isPresent() || bdc == false) {
+				if (result.isEmpty() || !bdc) {
 					String userPassword = ns.get(PASSWORD).asString();
-					if (userPassword != null && userPassword != "") {
+					if (userPassword != null && !userPassword.equals("")) {
 						MessageDigest md = MessageDigest.getInstance("SHA-256");
 						byte[] hash = md.digest(userPassword.getBytes(StandardCharsets.UTF_8));
 						String userPasswordHash = bytesToHex(hash);
 						passwdMSB = userPasswordHash.substring(0, 32);
+						ns.putShared("passwdMSB",passwdMSB);
+					}
+				}
+				else {
+					if(ns.isDefined("passwdMSB")) {
+						passwdMSB = ns.get("passwdMSB").asString();
 					}
 				}
 			}
-
-			String accessToken = getAccessToken(endpoint, config.clientId(), client_secret);
-			if (accessToken == "error") {
-				logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
-				if (config.dbg()) {
-					ns.putShared("PingOneProtectTokenError", "Failed to obtain access token for PingOne Protect");
+			String accessToken = "";
+			if(!ns.isDefined("p1accessToken")) {
+				accessToken = getAccessToken(endpoint, config.clientId(), client_secret);
+				if (Objects.equals(accessToken, "error")) {
+					logger.debug(loggerPrefix + "Failed to obtain PingOne service access token");
+					if (config.dbg()) {
+						ns.putShared("PingOneProtectTokenError", "Failed to obtain access token for PingOne Protect");
+					}
+					return Action.goTo("error").build();
 				}
-				return Action.goTo("error").build();
+				ns.putShared("p1accessToken", accessToken);
 			}
-
+			else {
+				accessToken = ns.get("p1accessToken").asString();
+			}
 			ns.putShared("p1riskEndpoint", riskEndpoint);
-			ns.putShared("p1accessToken", accessToken);
 
 			if (bdc) {
 				if (result.isPresent()) {
@@ -239,18 +250,18 @@ public class P1ProtectGetData implements Node {
 						ns.putShared("p1ProtectSignalsData", signalsData);
 					}
 					String signals = signalsData;
-
 					String riskEvalRequestBody = createRiskEvaluationBody(policyId, userName, resourceId, signals,
 							userType, ipAddress, flowType, userAgent, passwdMSB);
 					String riskEval = createRiskEvaluation(accessToken, riskEndpoint, riskEvalRequestBody);
-					if (riskEval.substring(0, 4) == "error") {
+
+					if (Objects.equals(riskEval.substring(0, 4),"error")) {
 						ns.putShared("p1riskEvalError", riskEval);
 						return Action.goTo("error").build();
 					}
 					if (config.apiResponse()) {
 						ns.putShared("p1riskEval", riskEval);
 					}
-					String riskLevel = getRiskLevel(riskEval, config.botResult());
+					String riskLevel = getRiskLevel(riskEval, config.advice());
 					String riskEvalId = getRiskEvaluationId(riskEval);
 					String riskScore = getRiskScore(riskEval);
 
@@ -276,14 +287,14 @@ public class P1ProtectGetData implements Node {
 				String riskEvalRequestBody = createRiskEvaluationBody(policyId, userName, resourceId, "", userType,
 						ipAddress, flowType, userAgent, passwdMSB);
 				String riskEval = createRiskEvaluation(accessToken, riskEndpoint, riskEvalRequestBody);
-				if (riskEval.substring(0, 4) == "error") {
+				if (Objects.equals(riskEval.substring(0, 4),"error")) {
 					ns.putShared("p1riskEvalError", riskEval);
 					return Action.goTo("error").build();
 				}
 				if (config.apiResponse()) {
 					ns.putShared("p1riskEval", riskEval);
 				}
-				String riskLevel = getRiskLevel(riskEval, config.botResult());
+				String riskLevel = getRiskLevel(riskEval, config.advice());
 				String riskEvalId = getRiskEvaluationId(riskEval);
 				String riskScore = getRiskScore(riskEval);
 
@@ -314,15 +325,23 @@ public class P1ProtectGetData implements Node {
 		return hexString.toString();
 	}
 
-	public static String getRiskLevel(String riskEval, boolean botOutcome) {
+	public static String getRiskLevel(String riskEval, List<String> advices) {
 		JSONObject obj = new JSONObject(riskEval);
 		String riskLevel = obj.getJSONObject("result").getString("level");
 
-		if (!botOutcome) {
+		if (!advices.isEmpty()) {
 			if (obj.getJSONObject("result").has("recommendedAction")) {
 				String recommendedAction = obj.getJSONObject("result").getString("recommendedAction");
-				if (recommendedAction.equals("BOT_MITIGATION")) {
-					riskLevel = "BOT_MITIGATION";
+
+				boolean matchedOutcome = false;
+				for(int i=0; i<advices.size(); i++) {
+					if(Objects.equals(recommendedAction, advices.get(i))){
+						matchedOutcome = true;
+						i = advices.size();
+					}
+				}
+				if(matchedOutcome) {
+					riskLevel = recommendedAction;
 				}
 			}
 		}
@@ -330,30 +349,26 @@ public class P1ProtectGetData implements Node {
 	}
 
 	public static String getRiskEvaluationId(String riskEval) {
-
 		JSONObject obj = new JSONObject(riskEval);
-		String evalId = obj.getString("id");
-		return evalId;
+        return obj.getString("id");
 	}
 
 	public static String getRiskScore(String riskEval) {
-
 		JSONObject obj = new JSONObject(riskEval);
-		String riskScore = obj.getJSONObject("result").get("score").toString();
-		return riskScore;
+        return obj.getJSONObject("result").get("score").toString();
 	}
 
 	public static String createRiskEvaluation(String accessToken, String endpoint, String body) {
 		StringBuffer response = new StringBuffer();
+		HttpURLConnection conn = null;
 		try {
 			URL url = new URL(endpoint);
-			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+			conn = (HttpURLConnection) url.openConnection();
 			conn.setConnectTimeout(4000);
 			conn.setDoOutput(true);
 			conn.setDoInput(true);
 			conn.setRequestProperty("Content-Type", "application/json");
 			conn.setRequestProperty("Authorization", "Bearer " + accessToken);
-
 			conn.setRequestMethod("POST");
 
 			OutputStream os = conn.getOutputStream();
@@ -367,9 +382,7 @@ public class P1ProtectGetData implements Node {
 					response.append(inputLine);
 				}
 				in.close();
-
 				return response.toString();
-
 			} else {
 				return "error:" + response.toString();
 			}
@@ -378,13 +391,19 @@ public class P1ProtectGetData implements Node {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		finally {
+			if(conn!=null) {
+				conn.disconnect();
+			}
+		}
 		return "error";
 	}
 
 	public static String getAccessToken(String endpoint, String client_id, String client_secret) {
+		HttpURLConnection conn = null;
 		try {
 			URL url = new URL(endpoint);
-			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+			conn = (HttpURLConnection) url.openConnection();
 			conn.setConnectTimeout(4000);
 			conn.setDoOutput(true);
 			conn.setDoInput(true);
@@ -392,7 +411,6 @@ public class P1ProtectGetData implements Node {
 			conn.setRequestMethod("POST");
 			String body = "grant_type=client_credentials&client_id=" + client_id + "&client_secret=" + client_secret
 					+ "&scope=default";
-
 			OutputStream os = conn.getOutputStream();
 			os.write(body.getBytes("UTF-8"));
 			os.close();
@@ -405,11 +423,8 @@ public class P1ProtectGetData implements Node {
 					response.append(inputLine);
 				}
 				in.close();
-
 				JSONObject obj = new JSONObject(response.toString());
-				String accessToken = obj.getString("access_token");
-				return accessToken;
-
+                return obj.getString("access_token");
 			} else {
 				return "error";
 			}
@@ -417,6 +432,11 @@ public class P1ProtectGetData implements Node {
 			e.printStackTrace();
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+		finally {
+			if(conn!=null) {
+				conn.disconnect();
+			}
 		}
 		return "error";
 	}
@@ -472,12 +492,8 @@ public class P1ProtectGetData implements Node {
 			results.add(new Outcome(highRisk, "high"));
 			results.add(new Outcome("error", "error"));
 
-			if (nodeAttributes.isNotNull()) {
-				if (!nodeAttributes.get("botResult").required().asBoolean()) {
-					results.add(new Outcome(botRisk, "bot"));
-				}
-			} else {
-				results.add(new Outcome(botRisk, "bot"));
+			for (String s : nodeAttributes.get("advice").required().asList(String.class)) {
+                results.add(new Outcome(s, s));
 			}
 			return Collections.unmodifiableList(results);
 		}

@@ -122,9 +122,10 @@ import com.google.inject.assistedinject.Assisted;
 
     public static String sendTxResult(String endpoint, String accessToken, String p1RiskEvalId, boolean result) {
       StringBuffer response = new StringBuffer();
+      HttpURLConnection conn = null;
       try {
         URL url = new URL(endpoint);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn = (HttpURLConnection) url.openConnection();
         conn.setConnectTimeout(4000);
         conn.setDoOutput(true);
         conn.setDoInput(true);
@@ -159,6 +160,11 @@ import com.google.inject.assistedinject.Assisted;
           e.printStackTrace();
       } catch (IOException e) {
           e.printStackTrace();
+      }
+      finally {
+          if(conn!=null) {
+              conn.disconnect();
+          }
       }
       return "error";
     }
