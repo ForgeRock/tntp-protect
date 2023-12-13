@@ -40,7 +40,7 @@ import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 
 
 @Node.Metadata(outcomeProvider = P1ProtectSignalInit.OutcomeProvider.class,
-        configClass = P1ProtectSignalInit.Config.class)
+        configClass = P1ProtectSignalInit.Config.class, tags = {"marketplace", "trustnetwork"})
 public class P1ProtectSignalInit extends AbstractDecisionNode {
 
 

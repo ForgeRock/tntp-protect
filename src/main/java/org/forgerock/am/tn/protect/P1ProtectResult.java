@@ -33,7 +33,7 @@ import com.google.inject.assistedinject.Assisted;
  */
 
  @Node.Metadata(outcomeProvider = P1ProtectResult.OutcomeProvider.class,
-         configClass = P1ProtectResult.Config.class)
+         configClass = P1ProtectResult.Config.class, tags = {"marketplace", "trustnetwork"})
  public class P1ProtectResult extends AbstractDecisionNode {
 
 

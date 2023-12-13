@@ -59,7 +59,7 @@ import org.slf4j.LoggerFactory;
  */
 public class P1ProtectSignalInitPlugin extends AbstractNodeAmPlugin {
 
-	static private String currentVersion = "0.0.11";
+	static private String currentVersion = "0.0.19";
 	static final String logAppender = "[Version: " + currentVersion + "][Marketplace]";
 	private final Logger logger = LoggerFactory.getLogger(P1ProtectSignalInitPlugin.class);
 

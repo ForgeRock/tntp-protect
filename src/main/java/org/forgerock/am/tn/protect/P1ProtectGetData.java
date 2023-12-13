@@ -38,7 +38,7 @@ import com.google.inject.assistedinject.Assisted;
 import com.sun.identity.authentication.callbacks.HiddenValueCallback;
 import com.sun.identity.authentication.callbacks.ScriptTextOutputCallback;
 
-@Node.Metadata(outcomeProvider = P1ProtectGetData.P1ProtectGetDataOutcomeProvider.class, configClass = P1ProtectGetData.Config.class)
+@Node.Metadata(outcomeProvider = P1ProtectGetData.P1ProtectGetDataOutcomeProvider.class, configClass = P1ProtectGetData.Config.class, tags = {"marketplace", "trustnetwork"})
 public class P1ProtectGetData implements Node {
 
 	private final Logger logger = LoggerFactory.getLogger(P1ProtectGetData.class);
@@ -197,7 +197,10 @@ public class P1ProtectGetData implements Node {
 			List<String> xfheader = context.request.headers.get("X-FORWARDED-FOR");
 			String ipAddress = "127.0.0.1";
 			if (xfheader != null && xfheader.size() > 0)
-				ipAddress = xfheader.toArray()[0].toString();
+				ipAddress = xfheader.get(0);
+				String[] split = ipAddress.split(",");
+				ipAddress = split[0];
+
 			String userName = ns.get(USERNAME).asString();
 
 			String riskEndpoint = "https://api.pingone." + getProtectRegion(config.protectRegion()) + "/v1/environments/" + config.envId() + "/riskEvaluations";
@@ -304,13 +307,14 @@ public class P1ProtectGetData implements Node {
 
 				return Action.goTo(riskLevel).build();
 			}
-		} catch (Exception ex) {
+		}    catch (Exception ex) {
 			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
-			context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
-			context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
-			return Action.goTo("error").build();
+			context.getStateFor(this).putShared(loggerPrefix + "Exception", new Date() + ": " + ex.getMessage());
+			context.getStateFor(this).putShared(loggerPrefix + "StackTrace", new Date() + ": " + stackTrace);
+			return Action.goTo("Error").build();
 		}
+
 	}
 
 	public static String bytesToHex(byte[] hash) {
@@ -358,7 +362,7 @@ public class P1ProtectGetData implements Node {
         return obj.getJSONObject("result").get("score").toString();
 	}
 
-	public static String createRiskEvaluation(String accessToken, String endpoint, String body) {
+	public String createRiskEvaluation(String accessToken, String endpoint, String body) throws Exception {
 		StringBuffer response = new StringBuffer();
 		HttpURLConnection conn = null;
 		try {
@@ -375,28 +379,23 @@ public class P1ProtectGetData implements Node {
 			os.write(body.getBytes("UTF-8"));
 			os.close();
 
-			if (conn.getResponseCode() == 201) {
-				BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-				String inputLine;
-				while ((inputLine = in.readLine()) != null) {
-					response.append(inputLine);
-				}
-				in.close();
-				return response.toString();
-			} else {
-				return "error:" + response.toString();
+
+			BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+			String inputLine;
+			while ((inputLine = in.readLine()) != null) {
+				response.append(inputLine);
 			}
-		} catch (MalformedURLException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		finally {
-			if(conn!=null) {
+			in.close();
+
+			return response.toString();
+
+		} catch (Exception e) {
+			throw e;
+		} finally {
+			if (conn != null) {
 				conn.disconnect();
 			}
 		}
-		return "error";
 	}
 
 	public static String getAccessToken(String endpoint, String client_id, String client_secret) {
@@ -443,28 +442,53 @@ public class P1ProtectGetData implements Node {
 
 	public static String createRiskEvaluationBody(String policyId, String userName, String resourceId, String signals,
 			String userType, String ipAddress, String flowType, String userAgent, String userPassword) {
-		String body = "{\"event\": {\"targetResource\": {\"id\":\"" + resourceId + "\",\"name\":\"" + resourceId
-				+ "\"},";
-		body = body + "\"ip\":\"" + ipAddress + "\",";
+		JSONObject bodyObject = new JSONObject();
+		JSONObject eventObject = new JSONObject();
+		eventObject.put("id", resourceId);
+		eventObject.put("name", resourceId);
+		bodyObject.put("event", eventObject);
+		bodyObject.put("ip", ipAddress);
+
 		if (!Objects.equals(signals, "") && signals != null) {
-			body = body + "\"sdk\": {\"signals\": {\"data\":\"" + signals + "\"}},";
+			JSONObject sdkObject = new JSONObject();
+			JSONObject signalsObject = new JSONObject();
+			signalsObject.put("data", signals);
+			sdkObject.put("signals", signalsObject);
+			bodyObject.put("sdk", sdkObject);
 		}
-		body = body + "\"flow\": {\"type\":\"" + flowType + "\"},";
-		body = body + "\"user\": {\"id\":\"" + userName + "\",\"name\":\"" + userName + "\",\"type\":\"" + userType
-				+ "\"";
+
+		JSONObject flowObject = new JSONObject();
+		flowObject.put("type", flowType);
+		bodyObject.put("flow", flowObject);
+
+		JSONObject userObject = new JSONObject();
+		userObject.put("id", userName);
+		userObject.put("name", userName);
+		userObject.put("type", userType);
+
+
+
 		if (userPassword != null && !userPassword.equals("")) {
-			body = body + ",\"password\": { \"hash\": { \"algorithm\": \"SHA_256\", \"value\": \"" + userPassword
-					+ "\"}}},";
-		} else {
-			body = body + "},";
+			JSONObject passwordObject = new JSONObject();
+			JSONObject hashObject = new JSONObject();
+			hashObject.put("algorithm", "SHA_256");
+			hashObject.put("value", userPassword);
+			passwordObject.put("hash", hashObject);
+
+			bodyObject.put("password", hashObject);
 		}
-		body = body + "\"sharingType\": \"SHARED\",\"browser\": {\"userAgent\":\"" + userAgent + "\"}}";
+		JSONObject browserObject = new JSONObject();
+		browserObject.put("userAgent", userAgent);
+		bodyObject.put("sharingType", "SHARED");
+		bodyObject.put("browser", browserObject);
+
 		if (!Objects.equals(policyId, "") && policyId != null) {
-			body = body + ",\"riskPolicySet\": {\"id\":\"" + policyId + "\"}}";
-		} else {
-			body = body + "}";
+			JSONObject policyObject = new JSONObject();
+			policyObject.put("id", policyId);
+			bodyObject.put("riskPolicySet", policyObject);
+
 		}
-		return body;
+		return bodyObject.toString();
 	}
 
 	public static String createClientSideScript(boolean debug) {
@@ -490,7 +514,7 @@ public class P1ProtectGetData implements Node {
 			results.add(new Outcome(lowRisk, "low"));
 			results.add(new Outcome(mediumRisk, "medium"));
 			results.add(new Outcome(highRisk, "high"));
-			results.add(new Outcome("error", "error"));
+			results.add(new Outcome("Error", "Error"));
 
 			for (String s : nodeAttributes.get("advice").required().asList(String.class)) {
                 results.add(new Outcome(s, s));
