@@ -128,7 +128,7 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
             logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
             context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
             context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
-            return Action.goTo("error").build();
+            return Action.goTo("Error").build();
         }
     }
 
@@ -177,7 +177,7 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
 
             return ImmutableList.of(
                 new Outcome("true", "true"),
-                new Outcome("error", "error")
+                new Outcome("Error", "Error")
             );
         }
     }

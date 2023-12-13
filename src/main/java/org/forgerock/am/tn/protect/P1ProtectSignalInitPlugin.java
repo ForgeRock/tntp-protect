@@ -112,9 +112,6 @@ public class P1ProtectSignalInitPlugin extends AbstractNodeAmPlugin {
      */	
 	@Override
 	public void upgrade(String fromVersion) throws PluginException {
-		
-		logger.error(loggerPrefix + "fromVersion = " + fromVersion);
-		logger.error(loggerPrefix + "currentVersion = " + currentVersion);
 		try {
 			pluginTools.upgradeAuthNode(P1ProtectGetData.class);
 			pluginTools.upgradeAuthNode(P1ProtectSignalInit.class);

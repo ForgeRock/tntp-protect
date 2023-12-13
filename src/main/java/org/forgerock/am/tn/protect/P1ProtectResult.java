@@ -86,38 +86,46 @@ import com.google.inject.assistedinject.Assisted;
 
     @Override
     public Action process(TreeContext context) throws NodeProcessException {
-      String p1accessToken;
-      NodeState ns = context.getStateFor(this);
-      String p1RiskEvalId = ns.get("p1RiskEvalId").asString();
-      boolean useShared=false;
-      p1accessToken = ns.get("p1accessToken").asString();
+        try {
+            String p1accessToken;
+            NodeState ns = context.getStateFor(this);
+            String p1RiskEvalId = ns.get("p1RiskEvalId").asString();
+            boolean useShared=false;
+            p1accessToken = ns.get("p1accessToken").asString();
 
-      if(p1accessToken==null || p1accessToken.equals("")){
-        p1accessToken = ns.get("p1accessToken").asString();
-        useShared=true;
-      }
-      String p1riskEndpoint = ns.get("p1riskEndpoint").asString();
-      p1riskEndpoint = p1riskEndpoint + "/" + p1RiskEvalId + "/event";
-      
-      if(useShared) {
-    	  ns.putShared("p1accessToken", "");
-      }
-      ns.putShared("p1riskEndpoint", "");
+            if(p1accessToken==null || p1accessToken.equals("")){
+                p1accessToken = ns.get("p1accessToken").asString();
+                useShared=true;
+            }
+            String p1riskEndpoint = ns.get("p1riskEndpoint").asString();
+            p1riskEndpoint = p1riskEndpoint + "/" + p1RiskEvalId + "/event";
 
-      boolean bResult;
-      if(config.journeyResult().toString().equals("SUCCESS")){
-        bResult=true;
-      } else {
-        bResult=false;
-      }
+            if(useShared) {
+                ns.putShared("p1accessToken", "");
+            }
+            ns.putShared("p1riskEndpoint", "");
 
-      String apiResult = sendTxResult(p1riskEndpoint,p1accessToken,p1RiskEvalId,bResult);
-      if(apiResult.substring(0,4).equals("error") || config.apiResponse()){
-    	  ns.putShared("p1ResultApiResult", apiResult);
-      }
+            boolean bResult;
+            if(config.journeyResult().toString().equals("SUCCESS")){
+                bResult=true;
+            } else {
+                bResult=false;
+            }
+
+            String apiResult = sendTxResult(p1riskEndpoint,p1accessToken,p1RiskEvalId,bResult);
+            if(apiResult.substring(0,4).equals("error") || config.apiResponse()){
+                ns.putShared("p1ResultApiResult", apiResult);
+            }
 
 
-      return Action.goTo("true").build();
+            return Action.goTo("true").build();
+        } catch(Exception ex) {
+            String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
+            logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
+            context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
+            context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
+            return Action.goTo("Error").build();
+        }
     }
 
     public static String sendTxResult(String endpoint, String accessToken, String p1RiskEvalId, boolean result) {
@@ -178,7 +186,7 @@ import com.google.inject.assistedinject.Assisted;
 
             return ImmutableList.of(
                 new Outcome("true", "true"),
-                new Outcome("error", "error")
+                new Outcome("Error", "Error")
             );
         }
     }
