@@ -45,6 +45,7 @@ public class P1ProtectGetData implements Node {
 	private String loggerPrefix = "[P1ProtectGetData]" + P1ProtectSignalInitPlugin.logAppender;
 
 	private final Config config;
+
 	private static final String BUNDLE = P1ProtectGetData.class.getName();
 
 	/**
@@ -94,6 +95,8 @@ public class P1ProtectGetData implements Node {
 	public static String lowRisk = "LOW";
 	public static String mediumRisk = "MEDIUM";
 	public static String highRisk = "HIGH";
+
+	private static final String ERROR = "ERROR";
 	public static String botRisk = "BOT_MITIGATION";
 
 	public interface Config {
@@ -190,6 +193,7 @@ public class P1ProtectGetData implements Node {
 			NodeState ns = context.getStateFor(this);
 
 			if (ns.get("PingOneProtectInit").asString() != null) {
+				ns.remove("PingOneProtectInit");
 				bdc = true;
 			}
 			String userAgent = context.request.headers.get("user-agent").toArray()[0].toString();
@@ -237,12 +241,13 @@ public class P1ProtectGetData implements Node {
 					if (config.dbg()) {
 						ns.putShared("PingOneProtectTokenError", "Failed to obtain access token for PingOne Protect");
 					}
-					return Action.goTo("error").build();
+					return Action.goTo(ERROR).build();
 				}
 				ns.putShared("p1accessToken", accessToken);
 			}
 			else {
 				accessToken = ns.get("p1accessToken").asString();
+				ns.remove("p1accessToken");
 			}
 			ns.putShared("p1riskEndpoint", riskEndpoint);
 
@@ -259,7 +264,7 @@ public class P1ProtectGetData implements Node {
 
 					if (Objects.equals(riskEval.substring(0, 4),"error")) {
 						ns.putShared("p1riskEvalError", riskEval);
-						return Action.goTo("error").build();
+						return Action.goTo(ERROR).build();
 					}
 					if (config.apiResponse()) {
 						ns.putShared("p1riskEval", riskEval);
@@ -292,7 +297,7 @@ public class P1ProtectGetData implements Node {
 				String riskEval = createRiskEvaluation(accessToken, riskEndpoint, riskEvalRequestBody);
 				if (Objects.equals(riskEval.substring(0, 4),"error")) {
 					ns.putShared("p1riskEvalError", riskEval);
-					return Action.goTo("error").build();
+					return Action.goTo(ERROR).build();
 				}
 				if (config.apiResponse()) {
 					ns.putShared("p1riskEval", riskEval);
@@ -312,12 +317,12 @@ public class P1ProtectGetData implements Node {
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
 			context.getStateFor(this).putShared(loggerPrefix + "Exception", new Date() + ": " + ex.getMessage());
 			context.getStateFor(this).putShared(loggerPrefix + "StackTrace", new Date() + ": " + stackTrace);
-			return Action.goTo("Error").build();
+			return Action.goTo(ERROR).build();
 		}
 
 	}
 
-	public static String bytesToHex(byte[] hash) {
+	private String bytesToHex(byte[] hash) {
 		StringBuilder hexString = new StringBuilder(2 * hash.length);
 		for (int i = 0; i < hash.length; i++) {
 			String hex = Integer.toHexString(0xff & hash[i]);
@@ -329,7 +334,8 @@ public class P1ProtectGetData implements Node {
 		return hexString.toString();
 	}
 
-	public static String getRiskLevel(String riskEval, List<String> advices) {
+	//Extract the risk level from the API response
+	private String getRiskLevel(String riskEval, List<String> advices) {
 		JSONObject obj = new JSONObject(riskEval);
 		String riskLevel = obj.getJSONObject("result").getString("level");
 
@@ -352,17 +358,20 @@ public class P1ProtectGetData implements Node {
 		return riskLevel;
 	}
 
-	public static String getRiskEvaluationId(String riskEval) {
+	//Extract the risk evaluation ID from the API response
+	private String getRiskEvaluationId(String riskEval) {
 		JSONObject obj = new JSONObject(riskEval);
         return obj.getString("id");
 	}
 
-	public static String getRiskScore(String riskEval) {
+	//Extract the risk score from the API response
+	private String getRiskScore(String riskEval) {
 		JSONObject obj = new JSONObject(riskEval);
         return obj.getJSONObject("result").get("score").toString();
 	}
 
-	public String createRiskEvaluation(String accessToken, String endpoint, String body) throws Exception {
+	//Make the API call to protect to get the risk evaluation
+	private String createRiskEvaluation(String accessToken, String endpoint, String body) throws Exception {
 		StringBuffer response = new StringBuffer();
 		HttpURLConnection conn = null;
 		try {
@@ -398,7 +407,8 @@ public class P1ProtectGetData implements Node {
 		}
 	}
 
-	public static String getAccessToken(String endpoint, String client_id, String client_secret) {
+	//Get the access token from protect using the client ID and client secret
+	private String getAccessToken(String endpoint, String client_id, String client_secret) {
 		HttpURLConnection conn = null;
 		try {
 			URL url = new URL(endpoint);
@@ -440,7 +450,8 @@ public class P1ProtectGetData implements Node {
 		return "error";
 	}
 
-	public static String createRiskEvaluationBody(String policyId, String userName, String resourceId, String signals,
+	//Create the JSON request body for the API call to protect
+	private String createRiskEvaluationBody(String policyId, String userName, String resourceId, String signals,
 			String userType, String ipAddress, String flowType, String userAgent, String userPassword) {
 		JSONObject bodyObject = new JSONObject();
 		JSONObject eventObject = new JSONObject();
@@ -491,7 +502,7 @@ public class P1ProtectGetData implements Node {
 		return bodyObject.toString();
 	}
 
-	public static String createClientSideScript(boolean debug) {
+	private String createClientSideScript(boolean debug) {
 
 		String debugLine1 = "";
 		String debugLine2 = "";
@@ -510,11 +521,14 @@ public class P1ProtectGetData implements Node {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
 
+			ResourceBundle bundle = locales.getBundleInPreferredLocale(P1ProtectGetData.BUNDLE,
+					P1ProtectGetData.P1ProtectGetDataOutcomeProvider.class.getClassLoader());
+
 			List<Outcome> results = new ArrayList<>();
-			results.add(new Outcome(lowRisk, "low"));
-			results.add(new Outcome(mediumRisk, "medium"));
-			results.add(new Outcome(highRisk, "high"));
-			results.add(new Outcome("Error", "Error"));
+			results.add(new Outcome(lowRisk, bundle.getString("LowRiskOutcome")));
+			results.add(new Outcome(mediumRisk, bundle.getString("MediumRiskOutcome")));
+			results.add(new Outcome(highRisk, bundle.getString("HighRiskOutcome")));
+			results.add(new Outcome(ERROR, bundle.getString("ErrorOutcome")));
 
 			for (String s : nodeAttributes.get("advice").required().asList(String.class)) {
                 results.add(new Outcome(s, s));

@@ -50,6 +50,9 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
     private final Config config;
     private static final String BUNDLE = P1ProtectSignalInit.class.getName();
 
+    private static final String SUCCESS = "TRUE";
+    private static final String ERROR = "ERROR";
+
     /**
      * Configuration for the node.
      */
@@ -57,16 +60,20 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
         /**
          * URL of the apps.pingone.com script to load
          */
+
+        //Ping Protect Javascript SDK URL
         @Attribute(order = 100)
         default String url() {
           return "https://apps.pingone.com/signals/web-sdk/5.2.7/signals-sdk.js";
         }
+
 
         @Attribute(order = 200)
         default boolean bdc() {
           return true;
         }
 
+        //Enable additional debugging
         @Attribute(order = 300)
         default boolean dbg() {
           return false;
@@ -78,12 +85,7 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
 
 
     /**
-     * Create the node using Guice injection. Just-in-time bindings can be used to obtain instances of other classes
-     * from the plugin.
-     *
-     * @param config The service config.
-     * @param realm The realm the node is in.
-     * @throws NodeProcessException If the configuration was not valid.
+     This node will initiate the javascript SDK and inject it into the page.
      */
 
 
@@ -106,15 +108,14 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
             Optional<String> result = context.getCallback(HiddenValueCallback.class).map(HiddenValueCallback::getValue).filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
 
             if (result.isPresent())  {
-              /*JsonValue newSharedState = context.sharedState.copy();
-              newSharedState.put("p1ProtectInit", "true");
-              return goTo(true).replaceSharedState(newSharedState).build();*/
-              return Action.goTo("true").build();
+              return Action.goTo(SUCCESS).build();
             } else {
                 if(config.dbg()) {
                   logger.debug(loggerPrefix + "Sending callbacks");
                 }
                 String clientSideScriptExecutorFunction = createClientSideScript(config.url(), config.bdc(), config.dbg());
+
+                //Create the javascript client sdk callback
                 ScriptTextOutputCallback scriptAndSelfSubmitCallback =
                         new ScriptTextOutputCallback(clientSideScriptExecutorFunction);
                 HiddenValueCallback hiddenValueCallback = new HiddenValueCallback("clientScriptOutputData");
@@ -128,11 +129,12 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
             logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
             context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
             context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
-            return Action.goTo("Error").build();
+            return Action.goTo(ERROR).build();
         }
     }
 
-    public static String createClientSideScript(String url, boolean bdc, boolean debug) {
+    //Create the javascript that will be injected into the page. This will eventually be replaced by a MetaCallback.
+    private String createClientSideScript(String url, boolean bdc, boolean debug) {
 
       String debugLine1 = "";
       String debugLine2 = "";
@@ -176,8 +178,8 @@ public class P1ProtectSignalInit extends AbstractDecisionNode {
                     OutcomeProvider.class.getClassLoader());
 
             return ImmutableList.of(
-                new Outcome("true", "true"),
-                new Outcome("Error", "Error")
+                    new Outcome(SUCCESS, bundle.getString("SuccessOutcome")),
+                    new Outcome(ERROR, bundle.getString("ErrorOutcome"))
             );
         }
     }

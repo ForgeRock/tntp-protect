@@ -27,10 +27,6 @@ import org.slf4j.LoggerFactory;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.assistedinject.Assisted;
 
-/**
- * A node that checks to see if zero-page login headers have specified username and whether that username is in a group
- * permitted to use zero-page login headers.
- */
 
  @Node.Metadata(outcomeProvider = P1ProtectResult.OutcomeProvider.class,
          configClass = P1ProtectResult.Config.class, tags = {"marketplace", "trustnetwork"})
@@ -44,6 +40,9 @@ import com.google.inject.assistedinject.Assisted;
    private static final String BUNDLE = P1ProtectResult.class.getName();
    public enum JourneyResult { SUCCESS, FAILURE }
 
+    private static final String SUCCESS = "TRUE";
+    private static final String ERROR = "ERROR";
+
    public String getJourneyResult(JourneyResult result) {
        if (result == JourneyResult.SUCCESS) return "SUCCESS";
        else return "FAILED";
@@ -53,9 +52,7 @@ import com.google.inject.assistedinject.Assisted;
      * Configuration for the node.
      */
     public interface Config {
-        /**
-         * The header name for zero-page login that will contain the identity's username.
-         */
+
          @Attribute(order = 100)
             default JourneyResult journeyResult() {
                 return JourneyResult.SUCCESS;
@@ -71,12 +68,7 @@ import com.google.inject.assistedinject.Assisted;
 
 
     /**
-     * Create the node using Guice injection. Just-in-time bindings can be used to obtain instances of other classes
-     * from the plugin.
-     *
-     * @param config The service config.
-     * @param realm The realm the node is in.
-     * @throws NodeProcessException If the configuration was not valid.
+     * This node will send the result to the ping protect to let it know if it was a protect/failure
      */
 
     @Inject
@@ -118,17 +110,18 @@ import com.google.inject.assistedinject.Assisted;
             }
 
 
-            return Action.goTo("true").build();
+            return Action.goTo(SUCCESS).build();
         } catch(Exception ex) {
             String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(ex);
             logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
             context.getStateFor(this).putShared(loggerPrefix + "Exception", ex.getMessage());
             context.getStateFor(this).putShared(loggerPrefix + "StackTrace", stackTrace);
-            return Action.goTo("Error").build();
+            return Action.goTo(ERROR).build();
         }
     }
 
-    public static String sendTxResult(String endpoint, String accessToken, String p1RiskEvalId, boolean result) {
+    //Send the success/fail result to ping protect
+    private String sendTxResult(String endpoint, String accessToken, String p1RiskEvalId, boolean result) {
       StringBuffer response = new StringBuffer();
       HttpURLConnection conn = null;
       try {
@@ -185,8 +178,8 @@ import com.google.inject.assistedinject.Assisted;
                     OutcomeProvider.class.getClassLoader());
 
             return ImmutableList.of(
-                new Outcome("true", "true"),
-                new Outcome("Error", "Error")
+                new Outcome(SUCCESS, bundle.getString("SuccessOutcome")),
+                new Outcome(ERROR, bundle.getString("ErrorOutcome"))
             );
         }
     }
