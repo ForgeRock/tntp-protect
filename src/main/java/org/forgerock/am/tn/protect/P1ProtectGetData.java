@@ -10,7 +10,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -236,7 +235,8 @@ public class P1ProtectGetData implements Node {
 					}
 					return Action.goTo("error").build();
 				}
-				ns.putShared("p1accessToken", accessToken);
+				//ns.putShared("p1accessToken", accessToken);
+				ns.putTransient("p1accessToken", accessToken);
 			}
 			else {
 				accessToken = ns.get("p1accessToken").asString();
@@ -476,9 +476,9 @@ public class P1ProtectGetData implements Node {
 			debugLine2 = "console.error('getData Error!', e);\n";
 		}
 
-		return "      _pingOneSignals.getData()  \n" + "       .then(function (result) {  \n" + debugLine1
+		return "      _pingOneSignals.getData()  \n" + "       .then(function (result) { setTimeout(function() { \n" + debugLine1
 				+ "           document.getElementById('clientScriptOutputData').value=result   \n"
-				+ "           document.getElementById('loginButton_0').click()  \n"
+				+ "           document.getElementById('loginButton_0').click(); },500)  \n"
 				+ "       }).catch(function (e) {  \n" + debugLine2 + "  });";
 	}
 
