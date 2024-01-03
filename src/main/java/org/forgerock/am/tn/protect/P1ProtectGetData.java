@@ -1,5 +1,6 @@
 package org.forgerock.am.tn.protect;
 
+import static java.lang.Float.parseFloat;
 import static org.forgerock.openam.auth.node.api.Action.send;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.PASSWORD;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
@@ -93,8 +94,7 @@ public class P1ProtectGetData implements Node {
 	public static String lowRisk = "LOW";
 	public static String mediumRisk = "MEDIUM";
 	public static String highRisk = "HIGH";
-	public static String botRisk = "BOT_MITIGATION";
-
+	public static String denyRisk = "DENY";
 	public interface Config {
 
 		@Attribute(order = 60)
@@ -135,7 +135,10 @@ public class P1ProtectGetData implements Node {
 		default String policyId() {
 			return "";
 		}
-
+		@Attribute(order = 210)
+		default boolean useUserId() {
+			return false;
+		}
 		@Attribute(order = 220)
 		default boolean evalPasswd() {
 			return false;
@@ -144,10 +147,8 @@ public class P1ProtectGetData implements Node {
 		@Attribute(order = 260)
 		List<String> advice();
 
-		/*
-		default boolean botResult() {
-			return true;
-		}*/
+		@Attribute(order = 270)
+		int denyThreshold();
 
 		@Attribute(order = 280)
 		default boolean apiResponse() {
@@ -198,6 +199,11 @@ public class P1ProtectGetData implements Node {
 			if (xfheader != null && xfheader.size() > 0)
 				ipAddress = xfheader.toArray()[0].toString();
 			String userName = ns.get(USERNAME).asString();
+			if(config.useUserId()) {
+				if(ns.isDefined("_id")) {
+					userName = ns.get("_id").asString();
+				}
+			}
 
 			String riskEndpoint = "https://api.pingone." + getProtectRegion(config.protectRegion()) + "/v1/environments/" + config.envId() + "/riskEvaluations";
 
@@ -269,6 +275,11 @@ public class P1ProtectGetData implements Node {
 					ns.putShared("p1RiskLevel", riskLevel);
 					ns.putShared("p1RiskScore", riskScore);
 
+					if(config.denyThreshold()>0 && parseFloat(riskScore)>= config.denyThreshold()) {
+						ns.putShared("p1RiskLevel", "DENY");
+						return Action.goTo(denyRisk).build();
+					}
+
 					return Action.goTo(riskLevel).build();
 
 				} else {
@@ -302,6 +313,10 @@ public class P1ProtectGetData implements Node {
 				ns.putShared("p1RiskLevel", riskLevel);
 				ns.putShared("p1RiskScore", riskScore);
 
+				if(config.denyThreshold()>0 && parseFloat(riskScore)>= config.denyThreshold()) {
+					ns.putShared("p1RiskLevel", "DENY");
+					return Action.goTo(denyRisk).build();
+				}
 				return Action.goTo(riskLevel).build();
 			}
 		} catch (Exception ex) {
@@ -490,11 +505,14 @@ public class P1ProtectGetData implements Node {
 			results.add(new Outcome(lowRisk, "low"));
 			results.add(new Outcome(mediumRisk, "medium"));
 			results.add(new Outcome(highRisk, "high"));
+			if(nodeAttributes.get("denyThreshold").asInteger()>0) {
+				results.add(new Outcome(denyRisk, "deny"));
+			}
 			results.add(new Outcome("error", "error"));
-
 			for (String s : nodeAttributes.get("advice").required().asList(String.class)) {
                 results.add(new Outcome(s, s));
 			}
+
 			return Collections.unmodifiableList(results);
 		}
 	}
