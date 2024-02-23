@@ -4,7 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="8942e6de-4def-45b9-8d6a-762a8d78812e" name="Changes" comment="" />
+    <list default="true" id="8942e6de-4def-45b9-8d6a-762a8d78812e" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -35,6 +38,11 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/images" />
+    </key>
+  </component>
   <component name="RunManager">
     <configuration default="true" type="DjangoTestsConfigurationType">
       <module name="tntp-protect" />
@@ -152,7 +160,7 @@
       <updated>1708706153847</updated>
       <workItem from="1708706154901" duration="1893000" />
       <workItem from="1708708072766" duration="897000" />
-      <workItem from="1708713378068" duration="2765000" />
+      <workItem from="1708713378068" duration="3656000" />
     </task>
     <servers />
   </component>

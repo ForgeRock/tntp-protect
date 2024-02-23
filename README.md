@@ -3,9 +3,6 @@
                                     </h1>
 
 
-<h1 id="PingOneProtectNode&amp;SDK(Latest)-ServerArchitectureDesign">Server Architecture Design</h1>
-
-<img src="images/image-1.png"/>
 
 <table class="wrapped confluenceTable tablesorter tablesorter-default stickyTableHeaders" role="grid" style="padding: 0px;" resolved=""><colgroup><col><col></colgroup><thead class="tableFloatingHeaderOriginal" style="position: static; margin-top: 0px; left: 325px; z-index: 3; width: 983px; top: 91px;"><tr role="row" class="tablesorter-headerRow"><th scope="col" class="confluenceTh tablesorter-header sortableHeader tablesorter-headerUnSorted" data-column="0" tabindex="0" role="columnheader" aria-disabled="false" unselectable="on" aria-sort="none" aria-label="Component: No sort applied, activate to apply an ascending sort" style="user-select: none; min-width: 8px; max-width: none;"><div class="tablesorter-header-inner">Component</div></th><th scope="col" class="confluenceTh tablesorter-header sortableHeader tablesorter-headerUnSorted" data-column="1" tabindex="0" role="columnheader" aria-disabled="false" unselectable="on" aria-sort="none" aria-label="Description: No sort applied, activate to apply an ascending sort" style="user-select: none; min-width: 8px; max-width: none;"><div class="tablesorter-header-inner"></div>Description</th></tr></thead><tbody aria-live="polite" aria-relevant="all"><tr role="row"><td class="confluenceTd">PingOne Risk Initialize Node</td><td class="confluenceTd">Provide Signal SDK configuration attribute, and instruct the client to initialize the Signal SDK.</td></tr><tr role="row"><td class="confluenceTd">PingOne Risk Evaluation Node</td><td class="confluenceTd">Handle requests and responses from clients, analyze risk results, and route to outcome.&nbsp;</td></tr><tr role="row"><td class="confluenceTd">PingOne Risk Result Node</td><td class="confluenceTd">Update evaluation authentication status.</td></tr><tr role="row"><td class="confluenceTd">PingOne Worker Service</td><td class="confluenceTd"><p>Manage PingOne AccessToken, Client Credential OAuth2 Request to PingOne Platform, and cache the AccessToken.</p><p>This component can be reused by other PingOne integrations. For example, PingOne Verify.</p></td></tr><tr role="row"><td class="confluenceTd">PingOne Protect Service</td><td class="confluenceTd">As API Client to PingOne Protect APIs.</td></tr></tbody></table>
 
@@ -15,7 +12,7 @@ A typical journey to use OTP when Risk is High.
 
 <p>Work with the PingOne Worker Application (With <strong>Roles Environment Admin</strong> and <strong>Identity Data Admin</strong>) and retrieve a Client Credential Grant Access Token, the Access Token will be cached until expires or the service configuration is updated.</p>
 
-Refer to <a https="https://github.com/ForgeRock/tntp-ping-service">PingOne Service </a>for setting up
+Refer to <a https="https://github.com/ForgeRock/tntp-ping-service/tree/cloudprep">PingOne Service </a>for setting up
 
 
 <br>
