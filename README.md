@@ -272,11 +272,13 @@ Update the final authentication result, so that the Risk Evaluation learns the r
 
 ## Outputs
 
-
+`Risk result`
 
 ## Outcomes
 
+`Next`
 
+Went through the evaluation process
 ## Troubleshooting
 
 If these nodes log an error, review the log messages the find the reason for the error and address the issue appropriately.
