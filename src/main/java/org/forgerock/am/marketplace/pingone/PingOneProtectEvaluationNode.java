@@ -282,8 +282,6 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 	 * @param realm                 The current realm.
 	 * @param identityService       Identity Service instance
 	 * @param coreWrapper           The core wrapper instance
-	 * @param pingOneWorkerService  The {@link PingOneWorkerService} instance.
-	 * @param pingOneProtectService The {@link PingOneProtectService} instance.
 	 */
 	@Inject
 	public PingOneProtectEvaluationNode(@Assisted Config config, @Assisted Realm realm,
@@ -337,7 +335,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 
 				// Score Threshold takes the highest precedence.
 				BigDecimal scoreLimit = new BigDecimal(config.scoreThreshold());
-				if (scoreLimit.compareTo(BigDecimal.ZERO) > 0) {
+				if (scoreLimit.compareTo(BigDecimal.ZERO) > 0 && result.get(RESULT).isDefined("score")) {
 					double score = result.get(RESULT).get("score").asDouble();
 					if (BigDecimal.valueOf(score).compareTo(scoreLimit) > 0) {
 						return Action.goTo(EXCEED_OUTCOME_ID).build();
@@ -353,7 +351,10 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 					logger.warn("Outcome not found for recommended action {}", advice);
 				}
 
-				return getAction(result.get(RESULT).get(LEVEL).asString());
+				if (result.get(RESULT).isDefined(LEVEL)) {
+					return getAction(result.get(RESULT).get(LEVEL).asString());
+				}
+				throw new IllegalArgumentException("Evaluation result is invalid" + result);
 
 			} else {
 
@@ -579,11 +580,11 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 	 * request URL. The request body defines the event that is processed for risk
 	 * evaluation.
 	 *
-	 * @param accessToken The {@link AccessToken} from {@link PingOneProtectService}
-	 * @param worker      The worker {@link PingOneWorkerConfig}
+	 * @param accessToken The {@link AccessToken} from
+	 * @param worker      The worker
 	 * @param body        The request body
 	 * @return The response from /environments/{{envID}}/riskEvaluations operation
-	 * @throws PingOneWorkerException When API response != 201
+	 * @throws Exception When API response != 201
 	 */
 	public JsonValue evaluate(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body) throws Exception {
 		Request request = null;
