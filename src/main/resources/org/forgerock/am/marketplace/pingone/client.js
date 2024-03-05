@@ -1,7 +1,7 @@
 var body = document.body;
 var script = document.createElement('script');
 script.type = 'text/javascript';
-script.src = 'url';
+script.src = "${theUrl}";
 script.setAttribute('defer', 'defer');
 
 if (typeof window._pingOneSignals === 'function') {
@@ -12,7 +12,6 @@ else {
   Array.prototype.slice.call(document.getElementsByTagName('button')).forEach(function (e) {
     e.style.display = 'none'
   })
-
   function onPingOneSignalsReady(callback) {
     if (window['_pingOneSignalsReady']) {
       callback();
@@ -23,7 +22,14 @@ else {
 
   onPingOneSignalsReady(function () {
     _pingOneSignals.init({
-      behavioralDataCollection: JSON.parse("${behavioralDataCollection}")
+      behavioralDataCollection: JSON.parse("${behavioralDataCollection}"),
+      envId: "${envId}",
+      consoleLogEnabled: JSON.parse("${consoleLogEnabled}"),
+      lazyMetadata: JSON.parse("${lazyMetadata}"),
+      deviceKeyRsyncIntervals: JSON.parse("${deviceKeyRsyncIntervals}"),
+      enableTrust: JSON.parse("${enableTrust}"),
+      disableTags: JSON.parse("${disableTags}"),
+      disableHub: JSON.parse("${disableHub}")
     }).then(function () {
       console.log("PingOne Signals initialized successfully");
       document.getElementById('loginButton_0').click()

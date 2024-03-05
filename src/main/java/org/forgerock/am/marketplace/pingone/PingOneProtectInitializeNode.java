@@ -8,10 +8,10 @@
 
 package org.forgerock.am.marketplace.pingone;
 
-
 import static java.util.Collections.emptyList;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
@@ -26,198 +26,203 @@ import org.forgerock.openam.auth.node.api.Action;
 import org.forgerock.openam.auth.node.api.Node;
 import org.forgerock.openam.auth.node.api.NodeProcessException;
 import org.forgerock.openam.auth.node.api.TreeContext;
+import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfig;
+import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValues;
+import org.forgerock.openam.sm.AnnotatedServiceRegistry;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.collect.ImmutableList;
 import com.google.inject.assistedinject.Assisted;
-import com.sun.identity.authentication.callbacks.HiddenValueCallback;
 
 /**
  * PingOne Protect Init Node.
  */
-@Node.Metadata(outcomeProvider = AbstractDecisionNode.OutcomeProvider.class,
-    configClass = PingOneProtectInitializeNode.Config.class,
-    tags = {"risk", "sdk"})
+@Node.Metadata(outcomeProvider = PingOneProtectInitializeNode.PingOneInitOutcomeProvider.class, configClass = PingOneProtectInitializeNode.Config.class, tags = {
+		"risk", "sdk" })
 public class PingOneProtectInitializeNode extends AbstractDecisionNode {
-    private static final Logger logger = LoggerFactory.getLogger(PingOneProtectInitializeNode.class);
+	private static final Logger logger = LoggerFactory.getLogger(PingOneProtectInitializeNode.class);
+	private String loggerPrefix = "[PingOneProtectInitializeNode]" + PingOneProtectPlugin.logAppender;
 
-    private final Config config;
-    
-    private static final String BUNDLE = PingOneProtectInitializeNode.class.getName();
-    private static final String NEXT = "NEXT";
-    private static final String ERROR = "ERROR";
+	private final Config config;
+	private TNTPPingOneConfig tntpPingOneConfig;
 
-    /**
-     * Configuration for the node.
-     */
-    public interface Config {
+	private static final String BUNDLE = PingOneProtectInitializeNode.class.getName();
+	private static final String NEXT = "NEXT";
+	private static final String ERROR = "ERROR";
 
-        /**
-         * Reference to the Ping One Worker Application.
-         *
-         * @return The PingOne Worker identifier
-         */
-        @Attribute(order = 100, requiredValue = true)
-        @PingOneWorker
-        PingOneWorkerConfig.Worker pingOneWorker();
+	/**
+	 * Configuration for the node.
+	 */
+	public interface Config {
 
-        /**
-         * Enable SDK logs.
-         *
-         * @return True to enable SDK logs
-         */
+		/**
+		 * The Configured service
+		 */
+		@Attribute(order = 100, choiceValuesClass = TNTPPingOneConfigChoiceValues.class)
+		default String tntpPingOneConfigName() {
+			return TNTPPingOneConfigChoiceValues.createTNTPPingOneConfigName("Global Default");
+		};
+		
         @Attribute(order = 200)
-        default boolean consoleLogEnabled() {
-            return false;
+        default String sdkUrl() {
+          return "https://apps.pingone.com/signals/web-sdk/5.2.7/signals-sdk.js";
         }
 
-        /**
-         * Metadata blacklist.
-         *
-         * @return Metadata blacklist
-         */
-        @Attribute(order = 300)
-        default List<String> deviceAttributesToIgnore() {
-            return emptyList();
-        }
+		/**
+		 * Enable SDK logs.
+		 *
+		 * @return True to enable SDK logs
+		 */
+		@Attribute(order = 300)
+		default boolean consoleLogEnabled() {
+			return false;
+		}
 
-        /**
-         * Custom Host.
-         *
-         * @return The Custom Host.
-         */
-        @Attribute(order = 400)
-        Optional<String> customHost();
+		/**
+		 * Metadata blacklist.
+		 *
+		 * @return Metadata blacklist
+		 */
+		@Attribute(order = 400)
+		default List<String> deviceAttributesToIgnore() {
+			return emptyList();
+		}
 
-        /**
-         * Lazy Metadata.
-         *
-         * @return True to calculate the metadata only on getData invocation,
-         * otherwise do it automatically on init. default is false
-         */
-        @Attribute(order = 500)
-        default boolean lazyMetadata() {
-            return false;
-        }
+		/**
+		 * Custom Host.
+		 *
+		 * @return The Custom Host.
+		 */
+		@Attribute(order = 500)
+		Optional<String> customHost();
 
-        /**
-         * Collect behavioral data.
-         *
-         * @return True to collect behavioral data.
-         */
-        @Attribute(order = 600)
-        default boolean behavioralDataCollection() {
-            return true;
-        }
+		/**
+		 * Lazy Metadata.
+		 *
+		 * @return True to calculate the metadata only on getData invocation, otherwise
+		 *         do it automatically on init. default is false
+		 */
+		@Attribute(order = 600)
+		default boolean lazyMetadata() {
+			return false;
+		}
 
-        /**
-         * Disable Hub.
-         *
-         * @return When true, the SDK store the deviceId to the localStorage only and
-         * won't use an iframe (hub). default is false
-         */
-        @Attribute(order = 700)
-        default boolean disableHub() {
-            return false;
-        }
+		/**
+		 * Collect behavioral data.
+		 *
+		 * @return True to collect behavioral data.
+		 */
+		@Attribute(order = 700)
+		default boolean behavioralDataCollection() {
+			return true;
+		}
 
-        /**
-         * Device Key Rsync Intervals (In Days).
-         *
-         * @return Number of days used to window the next time the device attestation should use the
-         * device fallback key. default is 14 days
-         */
-        @Attribute(order = 800)
-        default Integer deviceKeyRsyncIntervals() {
-            return 14;
-        }
+		/**
+		 * Disable Hub.
+		 *
+		 * @return When true, the SDK store the deviceId to the localStorage only and
+		 *         won't use an iframe (hub). default is false
+		 */
+		@Attribute(order = 800)
+		default boolean disableHub() {
+			return false;
+		}
 
-        /**
-         * Enable Trust.
-         *
-         * @return Tie the device payload to a non-extractable crypto key stored on the browser for
-         * content authenticity verification
-         */
-        @Attribute(order = 900)
-        default boolean enableTrust() {
-            return false;
-        }
+		/**
+		 * Device Key Rsync Intervals (In Days).
+		 *
+		 * @return Number of days used to window the next time the device attestation
+		 *         should use the device fallback key. default is 14 days
+		 */
+		@Attribute(order = 900)
+		default Integer deviceKeyRsyncIntervals() {
+			return 14;
+		}
 
-        /**
-         * Disable Tags.
-         *
-         * @return True to skip tag collection. default is false.
-         */
-        @Attribute(order = 1000)
-        default boolean disableTags() {
-            return false;
-        }
+		/**
+		 * Enable Trust.
+		 *
+		 * @return Tie the device payload to a non-extractable crypto key stored on the
+		 *         browser for content authenticity verification
+		 */
+		@Attribute(order = 1000)
+		default boolean enableTrust() {
+			return false;
+		}
 
-    }
+		/**
+		 * Disable Tags.
+		 *
+		 * @return True to skip tag collection. default is false.
+		 */
+		@Attribute(order = 1100)
+		default boolean disableTags() {
+			return false;
+		}
 
-    /**
-     * Create the node using Guice injection. Just-in-time bindings can be used to obtain instances of
-     * other classes from the plugin.
-     *
-     * @param config The Node configuration.
-     */
-    @Inject
-    public PingOneProtectInitializeNode(@Assisted Config config){
-        this.config = config;
-    }
+	}
 
-    @Override
-    public Action process(TreeContext context) throws NodeProcessException {
+	/**
+	 * Create the node using Guice injection. Just-in-time bindings can be used to
+	 * obtain instances of other classes from the plugin.
+	 *
+	 * @param config The Node configuration.
+	 */
+	@Inject
+	public PingOneProtectInitializeNode(@Assisted Config config, AnnotatedServiceRegistry serviceRegistry) {
+		this.config = config;
+		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
+	}
 
-//        Optional<ScriptTextOutputCallback> callback = context
-//            .getCallback(ScriptTextOutputCallback.class);
+	@Override
+	public Action process(TreeContext context) throws NodeProcessException {
+		try {
+			if (context.hasCallbacks()) {
+				return Action.goTo(NEXT).build();
+			} else {
+				return getCallback();
+			}
+		} catch (Exception e) {
+			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
+			context.getStateFor(this).putTransient(loggerPrefix + "Exception", new Date() + ": " + e.getMessage());
+			context.getStateFor(this).putTransient(loggerPrefix + "StackTrace", new Date() + ": " + stackTrace);
+			return Action.goTo(ERROR).withHeader("Error occurred").withErrorMessage(e.getMessage()).build();
+		}
 
-        if (context.hasCallbacks()) {
-            return Action.goTo(NEXT).build();
-        } else {
-            try {
-                return getCallback();
-            } catch (Exception e) {
-                logger.warn("Cannot find PingOne Worker", e);
-                return goTo(false).build();
-            }
-        }
-    }
+	}
 
-    private Action getCallback() throws Exception{
-    	String clientScript = ScriptHelper.readJS();
-    	
-    	List<Callback> callbacks = new ArrayList<>();
-    	callbacks.add(ScriptHelper.getScriptedCallback(
-		            	clientScript,
-		                config.pingOneWorker().environmentId(),
-		                String.valueOf(config.consoleLogEnabled()),
-		                config.deviceAttributesToIgnore().toString(),
-		                config.customHost().orElse(null),
-		                String.valueOf(config.lazyMetadata()),
-		                String.valueOf(config.behavioralDataCollection()),
-		                String.valueOf(config.deviceKeyRsyncIntervals()),
-		                String.valueOf(config.enableTrust()),
-		                String.valueOf(config.disableTags()),
-		                String.valueOf(config.disableHub()))
-    			);	
-    	callbacks.add(new HiddenValueCallback("auto"));//TODO is this necessary?  ScriptedNode may be enough
-    	
-        return Action.send(callbacks).build();
-    }
-    
+	private Action getCallback() throws Exception {
+		String clientScript = ScriptHelper.readJS(ScriptHelper.sdkJsPathTemplate);
+
+		List<Callback> callbacks = new ArrayList<>();
+		callbacks.add(ScriptHelper.getScriptedCallback(clientScript, tntpPingOneConfig.environmentId(),
+				String.valueOf(config.consoleLogEnabled()), 
+				config.deviceAttributesToIgnore().toString(),
+				config.customHost().orElse(null), 
+				String.valueOf(config.lazyMetadata()),
+				String.valueOf(config.behavioralDataCollection()), 
+				String.valueOf(config.deviceKeyRsyncIntervals()),
+				String.valueOf(config.enableTrust()), 
+				String.valueOf(config.disableTags()),
+				String.valueOf(config.disableHub()), 
+				String.valueOf(config.sdkUrl())));
+
+		return Action.send(callbacks).build();
+	}
+
 	/**
 	 * Defines the possible outcomes from this node.
 	 */
 	public static class PingOneInitOutcomeProvider implements org.forgerock.openam.auth.node.api.OutcomeProvider {
 		@Override
 		public List<Outcome> getOutcomes(PreferredLocales locales, JsonValue nodeAttributes) {
-			ResourceBundle bundle = locales.getBundleInPreferredLocale(BUNDLE, PingOneInitOutcomeProvider.class.getClassLoader());
-			return ImmutableList.of(
-					new Outcome(NEXT, bundle.getString("NextOutcome")), 
+			ResourceBundle bundle = locales.getBundleInPreferredLocale(BUNDLE,
+					PingOneInitOutcomeProvider.class.getClassLoader());
+			return ImmutableList.of(new Outcome(NEXT, bundle.getString("NextOutcome")),
 					new Outcome(ERROR, bundle.getString("ErrorOutcome")));
 		}
-	}   
+	}
 }
