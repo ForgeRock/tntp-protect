@@ -98,8 +98,6 @@ public class PingOneProtectResultNode extends AbstractDecisionNode  {
 	 *
 	 * @param config                The Node configuration.
 	 * @param realm                 The current realm.
-	 * @param pingOneWorkerService  The {@link PingOneWorkerService} instance.
-	 * @param pingOneProtectService The {@link PingOneProtectService} instance.
 	 */
 	@Inject
 	public PingOneProtectResultNode(@Assisted Config config, @Assisted Realm realm) {
@@ -144,12 +142,12 @@ public class PingOneProtectResultNode extends AbstractDecisionNode  {
 	 * the risk evaluation configuration, and to modify the completion status of the
 	 * resource when the risk evaluation is still in progress.
 	 *
-	 * @param accessToken The {@link AccessToken} from {@link PingOneProtectService}
-	 * @param worker      The worker {@link PingOneWorkerConfig}
+	 * @param accessToken The {@link AccessToken}
+	 * @param worker      The worker
 	 * @param riskEvalId  The risk evaluation id
 	 * @param status      The completion status
 	 * @return The response from /environments/{{envID}}/riskEvaluations operation
-	 * @throws PingOneWorkerException When API response != 200
+	 * @throws Exception When API response != 200
 	 */
 	public JsonValue event(AccessToken accessToken, TNTPPingOneConfig worker, String riskEvalId, String status)
 			throws Exception {
