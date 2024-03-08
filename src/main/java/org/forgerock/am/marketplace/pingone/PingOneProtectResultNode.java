@@ -1,9 +1,9 @@
 /*
- * Copyright 2024 ForgeRock AS. All Rights Reserved
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * a binding license agreement with Ping Identity Corporation.
  *
- * Use of this code requires a commercial software license with ForgeRock AS.
- * or with one of its affiliates. All use shall be exclusively subject
- * to such license between the licensee and ForgeRock AS.
+ * Copyright 2024 Ping Identity Corporation. All Rights Reserved
  */
 
 package org.forgerock.am.marketplace.pingone;
@@ -56,7 +56,7 @@ import com.google.inject.assistedinject.Assisted;
  * of the resource when the risk evaluation is still in progress.
  */
 @Node.Metadata(outcomeProvider = PingOneProtectResultNode.PingOneProtectResultNodeOutcomeProvider.class, configClass = PingOneProtectResultNode.Config.class, tags = {
-		"risk" })
+		"marketplace", "trustnetwork" })
 public class PingOneProtectResultNode extends AbstractDecisionNode  {
 	private static final Logger logger = LoggerFactory.getLogger(PingOneProtectResultNode.class);
 	private String loggerPrefix = "[PingOneProtectResultNode]" + PingOneProtectPlugin.logAppender;

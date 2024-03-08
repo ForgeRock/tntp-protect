@@ -1,9 +1,9 @@
 /*
- * Copyright 2024 ForgeRock AS. All Rights Reserved
+ * This code is to be used exclusively in connection with Ping Identity Corporation software or services. 
+ * Ping Identity Corporation only offers such software or services to legal entities who have entered into 
+ * a binding license agreement with Ping Identity Corporation.
  *
- * Use of this code requires a commercial software license with ForgeRock AS.
- * or with one of its affiliates. All use shall be exclusively subject
- * to such license between the licensee and ForgeRock AS.
+ * Copyright 2024 Ping Identity Corporation. All Rights Reserved
  */
 
 package org.forgerock.am.marketplace.pingone;
@@ -82,7 +82,7 @@ import com.sun.identity.idm.IdRepoException;
  * risk from client signals.
  */
 @Node.Metadata(outcomeProvider = PingOneProtectEvaluationNode.OutcomeProvider.class, configClass = PingOneProtectEvaluationNode.Config.class, tags = {
-		"risk", "sdk" })
+		"marketplace", "trustnetwork" })
 public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 
 	public static final String REST_PINGONE_CLIENT_SECRET = "am.services.pingone.worker.%s.clientsecret";
