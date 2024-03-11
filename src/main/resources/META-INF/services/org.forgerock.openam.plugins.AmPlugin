@@ -14,4 +14,4 @@
 # Copyright 2017-2018 ForgeRock AS.
 #
 
-org.forgerock.am.tn.protect.P1ProtectSignalInitPlugin
+org.forgerock.am.marketplace.pingone.PingOneProtectPlugin
