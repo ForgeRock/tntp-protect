@@ -195,10 +195,10 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 	}
 
 	private Action getCallback() throws Exception {
-		String clientScript = ScriptHelper.readJS(ScriptHelper.sdkJsPathTemplate);
+		String clientScript = Helper.readJS(Helper.sdkJsPathTemplate);
 
 		List<Callback> callbacks = new ArrayList<>();
-		callbacks.add(ScriptHelper.getScriptedCallback(clientScript, tntpPingOneConfig.environmentId(),
+		callbacks.add(Helper.getScriptedCallback(clientScript, tntpPingOneConfig.environmentId(),
 				String.valueOf(config.consoleLogEnabled()), 
 				config.deviceAttributesToIgnore().toString(),
 				config.customHost().orElse(null), 

@@ -17,13 +17,11 @@ import static org.forgerock.am.marketplace.pingone.PingOneProtectEvaluationNode.
 import static org.forgerock.am.marketplace.pingone.PingOneProtectEvaluationNode.StateKey.PINGONE_PROTECT_WORKER;
 import static org.forgerock.am.marketplace.pingone.PingOneProtectEvaluationNode.StateKey.RISK_EVALUATE_ID;
 import static org.forgerock.am.marketplace.pingone.PingOneProtectEvaluationNode.StateKey.RISK_EVALUATE_RESULT;
-import static org.forgerock.json.JsonValue.json;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.REALM;
 import static org.forgerock.openam.auth.node.api.SharedStateConstants.USERNAME;
 import static org.forgerock.openam.auth.nodes.helpers.AuthNodeUserIdentityHelper.getAMIdentity;
 
 import java.math.BigDecimal;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -36,13 +34,6 @@ import javax.security.auth.callback.Callback;
 
 import org.apache.commons.lang3.StringUtils;
 import org.forgerock.am.identity.application.LegacyIdentityService;
-import org.forgerock.http.handler.HttpClientHandler;
-import org.forgerock.http.header.AuthorizationHeader;
-import org.forgerock.http.header.MalformedHeaderException;
-import org.forgerock.http.header.authorization.BearerToken;
-import org.forgerock.http.protocol.Request;
-import org.forgerock.http.protocol.Response;
-import org.forgerock.http.protocol.Status;
 import org.forgerock.json.JsonValue;
 import org.forgerock.oauth2.core.AccessToken;
 import org.forgerock.openam.annotations.sm.Attribute;
@@ -59,10 +50,8 @@ import org.forgerock.openam.auth.service.marketplace.TNTPPingOneConfigChoiceValu
 import org.forgerock.openam.auth.service.marketplace.TNTPPingOneUtility;
 import org.forgerock.openam.core.CoreWrapper;
 import org.forgerock.openam.core.realms.Realm;
-import org.forgerock.openam.http.HttpConstants;
 import org.forgerock.openam.utils.CollectionUtils;
 import org.forgerock.openam.utils.JsonValueBuilder;
-import org.forgerock.services.context.RootContext;
 import org.forgerock.util.annotations.VisibleForTesting;
 import org.forgerock.util.i18n.PreferredLocales;
 import org.slf4j.Logger;
@@ -89,6 +78,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 	protected static String endpoint = "https://api.pingone";
 	private static final Logger logger = LoggerFactory.getLogger(PingOneProtectEvaluationNode.class);
 	private String loggerPrefix = "[PingOneProtectEvaluationNode]" + PingOneProtectPlugin.logAppender;
+	private final Helper client;
 
 	/**
 	 * State Key defined by this Node.
@@ -248,8 +238,8 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		 * @return The context state variable name.
 		 */
 		@Attribute(order = 1000)
-		default Optional<String> userId() {
-			return Optional.empty();
+		default String userId() {
+			return "universalid";
 		}
 
 		/**
@@ -258,8 +248,8 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		 * @return The context state variable name.
 		 */
 		@Attribute(order = 1100)
-		default Optional<String> username() {
-			return Optional.empty();
+		default String username() {
+			return "username";
 		}
 
 		/**
@@ -282,15 +272,17 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 	 * @param realm                 The current realm.
 	 * @param identityService       Identity Service instance
 	 * @param coreWrapper           The core wrapper instance
+	 * @param helper				The Helper class instantiated 
 	 */
 	@Inject
 	public PingOneProtectEvaluationNode(@Assisted Config config, @Assisted Realm realm,
-			LegacyIdentityService identityService, CoreWrapper coreWrapper) {
+			LegacyIdentityService identityService, CoreWrapper coreWrapper, Helper client) {
 		this.config = config;
 		this.realm = realm;
 		this.identityService = identityService;
 		this.coreWrapper = coreWrapper;
 		this.tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(config.tntpPingOneConfigName());
+		this.client = client;
 	}
 
 	@Override
@@ -313,7 +305,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 
 				NodeState state = context.getStateFor(this);
 
-				JsonValue result = evaluate(accessToken, tntpPingOneConfig,
+				JsonValue result = client.evaluate(accessToken, tntpPingOneConfig,
 						getRequestBody(context, state, signals.orElse(null)));
 
 				// Put information to sharedState so that the PingOneProtectResult will update
@@ -426,14 +418,16 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		return JsonValueBuilder.toJsonValue(JsonValueBuilder.getObjectMapper().writeValueAsString(root));
 	}
 
+	
+	//TODO
 	private Event.User prepareUser(TreeContext context, NodeState state) {
 
 		Event.User user = null;
 		String userId = null;
 		String username = null;
 
-		if (config.userId().isPresent()) {
-			JsonValue value = state.get(config.userId().get());
+		if (config.userId()!=null) {
+			JsonValue value = state.get(config.userId());
 			if (value != null) {
 				userId = value.asString();
 			}
@@ -442,8 +436,8 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 			userId = user.getId();
 		}
 
-		if (config.username().isPresent()) {
-			JsonValue value = state.get(config.username().get());
+		if (config.username()!=null) {
+			JsonValue value = state.get(config.username());
 			if (value != null) {
 				username = value.asString();
 			}
@@ -485,10 +479,10 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 
 	private Action getCallback() throws Exception {
 
-		String clientScript = ScriptHelper.readJS(ScriptHelper.sdkJsPathSigTemplate);
+		String clientScript = Helper.readJS(Helper.sdkJsPathSigTemplate);
 
 		List<Callback> callbacks = new ArrayList<>();
-		callbacks.add(ScriptHelper.getSigCallback(clientScript));
+		callbacks.add(Helper.getSigCallback(clientScript));
 		callbacks.add(new HiddenValueCallback("clientScriptOutputData"));
 
 		return Action.send(callbacks).build();
@@ -548,15 +542,15 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 			return outcomes;
 		}
 	}
-
+					//TODO need to check this!
 	@Override
 	public InputState[] getInputs() {
 		List<InputState> inputs = new ArrayList<>();
-		if (config.userId().isPresent()) {
-			inputs.add(new InputState(config.userId().get(), false));
+		if (config.userId()!=null) {
+			inputs.add(new InputState(config.userId(), false));
 		}
-		if (config.username().isPresent()) {
-			inputs.add(new InputState(config.username().get(), false));
+		if (config.username()!=null) {
+			inputs.add(new InputState(config.username(), false));
 		}
 		inputs.add(new InputState(USERNAME, false));
 		inputs.add(new InputState(REALM, false));
@@ -574,61 +568,5 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 	 * field(PINGONE_RISK_ENV_ID, envId))); }
 	 */
 
-	/**
-	 * the POST /environments/{{envID}}/riskEvaluations operation to create a new
-	 * risk evaluation resource associated with the environment specified in the
-	 * request URL. The request body defines the event that is processed for risk
-	 * evaluation.
-	 *
-	 * @param accessToken The {@link AccessToken} from
-	 * @param worker      The worker
-	 * @param body        The request body
-	 * @return The response from /environments/{{envID}}/riskEvaluations operation
-	 * @throws Exception When API response != 201
-	 */
-	public JsonValue evaluate(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body) throws Exception {
-		Request request = null;
-		HttpClientHandler handler = null;
-		try {
-			handler = new HttpClientHandler();
-			URI uri = URI.create(endpoint + worker.environmentRegion().getDomainSuffix() + "/v1/environments/" + worker.environmentId()
-					+ "/riskEvaluations");
-			request = new Request().setUri(uri).setMethod(HttpConstants.Methods.POST);
-			request.getEntity().setJson(body);
-			addAuthorizationHeader(request, accessToken);
-			Response response = handler.handle(new RootContext(), request).getOrThrow();
-			if (response.getStatus() == Status.CREATED) {
-				return json(response.getEntity().getJson());
-			} else {
-				throw new Exception("PingOne Create Risk Evaluation API response with error." + response.getStatus()
-						+ "-" + response.getEntity().getString());
-			}
-		} catch (Exception e) {
-			throw new Exception("Failed to create risk evaluation", e);
-		} finally {
-			if (handler != null) {
-				try {
-					handler.close();
-				} catch (Exception e) {
-					// DO NOTHING
-				}
-			}
-
-			if (request != null) {
-				try {
-					request.close();
-				} catch (Exception e) {
-					// DO NOTHING
-				}
-			}
-		}
-	}
-
-	private void addAuthorizationHeader(Request request, AccessToken accessToken) throws MalformedHeaderException {
-		AuthorizationHeader header = new AuthorizationHeader();
-		BearerToken bearerToken = new BearerToken(accessToken.getTokenId());
-		header.setRawValue(BearerToken.NAME + " " + bearerToken);
-		request.addHeaders(header);
-	}
 
 }
