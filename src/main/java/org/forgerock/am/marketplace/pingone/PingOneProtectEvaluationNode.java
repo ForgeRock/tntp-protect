@@ -309,7 +309,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 				}
 
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 
 				NodeState state = context.getStateFor(this);
 
@@ -586,7 +586,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 	 * @return The response from /environments/{{envID}}/riskEvaluations operation
 	 * @throws Exception When API response != 201
 	 */
-	public JsonValue evaluate(AccessToken accessToken, TNTPPingOneConfig worker, JsonValue body) throws Exception {
+	public JsonValue evaluate(String accessToken, TNTPPingOneConfig worker, JsonValue body) throws Exception {
 		Request request = null;
 		HttpClientHandler handler = null;
 		try {
@@ -624,9 +624,9 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		}
 	}
 
-	private void addAuthorizationHeader(Request request, AccessToken accessToken) throws MalformedHeaderException {
+	private void addAuthorizationHeader(Request request, String accessToken) throws MalformedHeaderException {
 		AuthorizationHeader header = new AuthorizationHeader();
-		BearerToken bearerToken = new BearerToken(accessToken.getTokenId());
+		BearerToken bearerToken = new BearerToken(accessToken);
 		header.setRawValue(BearerToken.NAME + " " + bearerToken);
 		request.addHeaders(header);
 	}
