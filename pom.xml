@@ -15,7 +15,7 @@
     <artifactId>TNTPPingOneProtect</artifactId>
 
     <groupId>org.forgerock.am.marketplace</groupId>
-    <version>0.0.22</version>    
+    <version>0.0.23</version>    
     <name>PingOne Protect</name>
     <description>PingOne Protect Nodes</description>
 
@@ -79,7 +79,7 @@
         <dependency>
             <groupId>org.forgerock.openam.auth.service.marketplace</groupId>
             <artifactId>TNTPPingOneService</artifactId>
-            <version>0.0.20</version>
+            <version>0.0.21</version>
         </dependency>
     </dependencies>
 

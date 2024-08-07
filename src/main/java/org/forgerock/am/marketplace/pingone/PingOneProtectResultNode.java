@@ -115,7 +115,7 @@ public class PingOneProtectResultNode extends AbstractDecisionNode  {
 			if (riskId != null && worker != null) {
 				TNTPPingOneConfig tntpPingOneConfig = TNTPPingOneConfigChoiceValues.getTNTPPingOneConfig(worker.asString());
 				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				AccessToken accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 				event(accessToken, tntpPingOneConfig, riskId.asString(), config.status().name());
 				state.putShared(RISK_EVALUATE_COMPLETION_RESULT, true);
 			} else {
@@ -149,7 +149,7 @@ public class PingOneProtectResultNode extends AbstractDecisionNode  {
 	 * @return The response from /environments/{{envID}}/riskEvaluations operation
 	 * @throws Exception When API response != 200
 	 */
-	public JsonValue event(AccessToken accessToken, TNTPPingOneConfig worker, String riskEvalId, String status)
+	public JsonValue event(String accessToken, TNTPPingOneConfig worker, String riskEvalId, String status)
 			throws Exception {
 		Request request = null;
 		HttpClientHandler handler = null;
@@ -189,9 +189,9 @@ public class PingOneProtectResultNode extends AbstractDecisionNode  {
 	}
 	
 	
-	private void addAuthorizationHeader(Request request, AccessToken accessToken) throws MalformedHeaderException {
+	private void addAuthorizationHeader(Request request, String accessToken) throws MalformedHeaderException {
 		AuthorizationHeader header = new AuthorizationHeader();
-		BearerToken bearerToken = new BearerToken(accessToken.getTokenId());
+		BearerToken bearerToken = new BearerToken(accessToken);
 		header.setRawValue(BearerToken.NAME + " " + bearerToken);
 		request.addHeaders(header);
 	}
