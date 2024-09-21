@@ -34,6 +34,7 @@ import java.util.Set;
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 
+import com.sun.identity.authentication.spi.MetadataCallback;
 import org.apache.commons.lang3.StringUtils;
 import org.forgerock.am.identity.application.LegacyIdentityService;
 import org.forgerock.http.handler.HttpClientHandler;
@@ -272,6 +273,15 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 			return false;
 		}
 
+		/**
+		 * Specify whether to return a script or metadata callback.
+		 *
+		 * @return {@literal true} if return as a script.
+		 */
+		@Attribute(order = 1300)
+		default boolean useScript() {
+			return true;
+		}
 	}
 
 	/**
@@ -299,62 +309,67 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		try {
 			if (context.hasCallbacks()) {
 
-				Optional<HiddenValueCallback> callback = context.getCallback(HiddenValueCallback.class);
-				Optional<String> signals = context.getCallback(HiddenValueCallback.class)
-						.map(HiddenValueCallback::getValue)
-						.filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
+				if (!config.useScript()) {
+					Optional<HiddenValueCallback> callback = context.getCallback(HiddenValueCallback.class);
+					Optional<String> signals = context.getCallback(HiddenValueCallback.class)
+							.map(HiddenValueCallback::getValue)
+							.filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
 
-				if (callbackHasError(callback)) {
-					return Action.goTo(ERROR).build();
-				}
-
-				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-
-				NodeState state = context.getStateFor(this);
-
-				JsonValue result = evaluate(accessToken, tntpPingOneConfig,
-						getRequestBody(context, state, signals.orElse(null)));
-
-				// Put information to sharedState so that the PingOneProtectResult will update
-				// the risk result.
-				state.putShared(RISK_EVALUATE_ID, result.get(ID));
-				// state.putShared(PINGONE_PROTECT_WORKER, tntpPingOneConfig.id());
-				state.putShared(PINGONE_PROTECT_WORKER, config.tntpPingOneConfigName());
-
-				// Log Audit attribute
-				// riskEvaluateId = result.get(ID).asString();
-				// envId = tntpPingOneConfig.environmentId();
-
-				// Store to transient state instead of sharedstate, putting to sharedstate will
-				// increase the size of
-				// authId token
-				if (config.storeEvaluateResult()) {
-					state.putTransient(RISK_EVALUATE_RESULT, result);
-				}
-
-				// Score Threshold takes the highest precedence.
-				BigDecimal scoreLimit = new BigDecimal(config.scoreThreshold());
-				if (scoreLimit.compareTo(BigDecimal.ZERO) > 0 && result.get(RESULT).isDefined("score")) {
-					double score = result.get(RESULT).get("score").asDouble();
-					if (BigDecimal.valueOf(score).compareTo(scoreLimit) > 0) {
-						return Action.goTo(EXCEED_OUTCOME_ID).build();
+					if (callbackHasError(callback)) {
+						return Action.goTo(ERROR).build();
 					}
-				}
 
-				// If the recommended Action outcome is not defined, fallback to level
-				if (result.get(RESULT).isDefined(RECOMMENDED_ACTION)) {
-					String advice = result.get(RESULT).get(RECOMMENDED_ACTION).asString();
-					if (config.recommendedActions().contains(advice)) {
-						return Action.goTo(advice).build();
+					TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+					String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
+
+					NodeState state = context.getStateFor(this);
+
+					JsonValue result = evaluate(accessToken, tntpPingOneConfig,
+							getRequestBody(context, state, signals.orElse(null)));
+
+					// Put information to sharedState so that the PingOneProtectResult will update
+					// the risk result.
+					state.putShared(RISK_EVALUATE_ID, result.get(ID));
+					// state.putShared(PINGONE_PROTECT_WORKER, tntpPingOneConfig.id());
+					state.putShared(PINGONE_PROTECT_WORKER, config.tntpPingOneConfigName());
+
+					// Log Audit attribute
+					// riskEvaluateId = result.get(ID).asString();
+					// envId = tntpPingOneConfig.environmentId();
+
+					// Store to transient state instead of sharedstate, putting to sharedstate will
+					// increase the size of
+					// authId token
+					if (config.storeEvaluateResult()) {
+						state.putTransient(RISK_EVALUATE_RESULT, result);
 					}
-					logger.warn("Outcome not found for recommended action {}", advice);
+
+					// Score Threshold takes the highest precedence.
+					BigDecimal scoreLimit = new BigDecimal(config.scoreThreshold());
+					if (scoreLimit.compareTo(BigDecimal.ZERO) > 0 && result.get(RESULT).isDefined("score")) {
+						double score = result.get(RESULT).get("score").asDouble();
+						if (BigDecimal.valueOf(score).compareTo(scoreLimit) > 0) {
+							return Action.goTo(EXCEED_OUTCOME_ID).build();
+						}
+					}
+
+					// If the recommended Action outcome is not defined, fallback to level
+					if (result.get(RESULT).isDefined(RECOMMENDED_ACTION)) {
+						String advice = result.get(RESULT).get(RECOMMENDED_ACTION).asString();
+						if (config.recommendedActions().contains(advice)) {
+							return Action.goTo(advice).build();
+						}
+						logger.warn("Outcome not found for recommended action {}", advice);
+					}
+
+					if (result.get(RESULT).isDefined(LEVEL)) {
+						return getAction(result.get(RESULT).get(LEVEL).asString());
+					}
+
+					throw new IllegalArgumentException("Evaluation result is invalid" + result);
 				}
 
-				if (result.get(RESULT).isDefined(LEVEL)) {
-					return getAction(result.get(RESULT).get(LEVEL).asString());
-				}
-				throw new IllegalArgumentException("Evaluation result is invalid" + result);
+				return Action.goTo(NEXT).build(); //TODO what outcome should this be?
 
 			} else {
 
@@ -488,8 +503,20 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		String clientScript = ScriptHelper.readJS(ScriptHelper.sdkJsPathSigTemplate);
 
 		List<Callback> callbacks = new ArrayList<>();
-		callbacks.add(ScriptHelper.getSigCallback(clientScript));
-		callbacks.add(new HiddenValueCallback("clientScriptOutputData"));
+
+		if (config.useScript()) {
+			callbacks.add(ScriptHelper.getSigCallback(clientScript));
+			callbacks.add(new HiddenValueCallback("clientScriptOutputData"));
+		} else {
+			JsonValue callbackData = JsonValue.json(JsonValue.object());
+			callbackData.put("_type", "PingOneProtect");
+			callbackData.put("_action", "protect_risk_evaluation");  // TODO check if it is evaluate or evaluation
+			callbackData.put("envId", tntpPingOneConfig.environmentId());
+			callbackData.put("pauseBehavioralData", config.pauseBehavioralData());
+			callbacks.add(new MetadataCallback(callbackData));
+			callbacks.add(new HiddenValueCallback("pingone_risk_evaluation_signals", ""));
+			callbacks.add(new HiddenValueCallback("clientError", ""));
+		}
 
 		return Action.send(callbacks).build();
 	}

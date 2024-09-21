@@ -237,7 +237,7 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 
 	private JsonValue getInitValues() {
 		JsonValue initValues = JsonValue.json(JsonValue.object());
-		initValues.put("environmentId", tntpPingOneConfig.environmentId());
+		initValues.put("envId", tntpPingOneConfig.environmentId());
 		initValues.put("consoleLogEnabled", config.consoleLogEnabled());
 		initValues.put("deviceAttributesToIgnore", config.deviceAttributesToIgnore());
 		initValues.put("customHost", config.customHost().orElse(null));

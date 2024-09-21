@@ -20,7 +20,7 @@
     <description>PingOne Protect Nodes</description>
 
     <properties>
-        <am.version>7.5.0</am.version>
+        <am.version>7.4.0</am.version>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
