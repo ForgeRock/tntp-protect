@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
@@ -138,8 +140,6 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 
 	private final LegacyIdentityService identityService;
 	private final CoreWrapper coreWrapper;
-	// private final PingOneWorkerService pingOneWorkerService;
-	// private final PingOneProtectService pingOneProtectService;
 
 	private final Realm realm;
 
@@ -309,70 +309,61 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		try {
 			if (context.hasCallbacks()) {
 
-				if (!config.useScript()) {
-					Optional<HiddenValueCallback> callback = context.getCallback(HiddenValueCallback.class);
-					Optional<String> signals = context.getCallback(HiddenValueCallback.class)
-							.map(HiddenValueCallback::getValue)
-							.filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
+				String signals = getSignalsFromCallback(context);
 
-					if (callbackHasError(callback)) {
-						return Action.goTo(ERROR).build();
-					}
-
-					TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
-					String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
-
-					NodeState state = context.getStateFor(this);
-
-					JsonValue result = evaluate(accessToken, tntpPingOneConfig,
-							getRequestBody(context, state, signals.orElse(null)));
-
-					// Put information to sharedState so that the PingOneProtectResult will update
-					// the risk result.
-					state.putShared(RISK_EVALUATE_ID, result.get(ID));
-					// state.putShared(PINGONE_PROTECT_WORKER, tntpPingOneConfig.id());
-					state.putShared(PINGONE_PROTECT_WORKER, config.tntpPingOneConfigName());
-
-					// Log Audit attribute
-					// riskEvaluateId = result.get(ID).asString();
-					// envId = tntpPingOneConfig.environmentId();
-
-					// Store to transient state instead of sharedstate, putting to sharedstate will
-					// increase the size of
-					// authId token
-					if (config.storeEvaluateResult()) {
-						state.putTransient(RISK_EVALUATE_RESULT, result);
-					}
-
-					// Score Threshold takes the highest precedence.
-					BigDecimal scoreLimit = new BigDecimal(config.scoreThreshold());
-					if (scoreLimit.compareTo(BigDecimal.ZERO) > 0 && result.get(RESULT).isDefined("score")) {
-						double score = result.get(RESULT).get("score").asDouble();
-						if (BigDecimal.valueOf(score).compareTo(scoreLimit) > 0) {
-							return Action.goTo(EXCEED_OUTCOME_ID).build();
-						}
-					}
-
-					// If the recommended Action outcome is not defined, fallback to level
-					if (result.get(RESULT).isDefined(RECOMMENDED_ACTION)) {
-						String advice = result.get(RESULT).get(RECOMMENDED_ACTION).asString();
-						if (config.recommendedActions().contains(advice)) {
-							return Action.goTo(advice).build();
-						}
-						logger.warn("Outcome not found for recommended action {}", advice);
-					}
-
-					if (result.get(RESULT).isDefined(LEVEL)) {
-						return getAction(result.get(RESULT).get(LEVEL).asString());
-					}
-
-					throw new IllegalArgumentException("Evaluation result is invalid" + result);
+				if (callbackHasError(context)) {
+					return Action.goTo(ERROR).build();
 				}
 
-				return Action.goTo(NEXT).build(); //TODO what outcome should this be?
+				TNTPPingOneUtility tntpP1U = TNTPPingOneUtility.getInstance();
+				String accessToken = tntpP1U.getAccessToken(realm, tntpPingOneConfig);
 
+				NodeState state = context.getStateFor(this);
+
+				JsonValue result = evaluate(accessToken, tntpPingOneConfig,
+						getRequestBody(context, state, signals));
+
+				// Put information to sharedState so that the PingOneProtectResult will update
+				// the risk result.
+				state.putShared(RISK_EVALUATE_ID, result.get(ID));
+				// state.putShared(PINGONE_PROTECT_WORKER, tntpPingOneConfig.id());
+				state.putShared(PINGONE_PROTECT_WORKER, config.tntpPingOneConfigName());
+
+				// Log Audit attribute
+				// riskEvaluateId = result.get(ID).asString();
+				// envId = tntpPingOneConfig.environmentId();
+
+				// Store to transient state instead of sharedstate, putting to sharedstate will
+				// increase the size of
+				// authId token
+				if (config.storeEvaluateResult()) {
+					state.putTransient(RISK_EVALUATE_RESULT, result);
+				}
+
+				// Score Threshold takes the highest precedence.
+				BigDecimal scoreLimit = new BigDecimal(config.scoreThreshold());
+				if (scoreLimit.compareTo(BigDecimal.ZERO) > 0 && result.get(RESULT).isDefined("score")) {
+					double score = result.get(RESULT).get("score").asDouble();
+					if (BigDecimal.valueOf(score).compareTo(scoreLimit) > 0) {
+						return Action.goTo(EXCEED_OUTCOME_ID).build();
+					}
+				}
+
+				// If the recommended Action outcome is not defined, fallback to level
+				if (result.get(RESULT).isDefined(RECOMMENDED_ACTION)) {
+					String advice = result.get(RESULT).get(RECOMMENDED_ACTION).asString();
+					if (config.recommendedActions().contains(advice)) {
+						return Action.goTo(advice).build();
+					}
+					logger.warn("Outcome not found for recommended action {}", advice);
+				}
+
+				if (result.get(RESULT).isDefined(LEVEL)) {
+					return getAction(result.get(RESULT).get(LEVEL).asString());
+				}
+
+				throw new IllegalArgumentException("Evaluation result is invalid" + result);
 			} else {
-
 				return getCallback();
 			}
 		} catch (Exception e) {
@@ -385,15 +376,48 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		}
 	}
 
-	private boolean callbackHasError(Optional<HiddenValueCallback> callback) {
-
-		// if (StringUtils.isNotEmpty(callback.get().getClientError())) {
-		// return Action.goTo(CLIENT_ERROR_OUTCOME_ID).build();
-		// }
-
-		// TODO
-		return false;
+	private String getSignalsFromCallback(TreeContext context) {
+		AtomicReference<String> signals = new AtomicReference<>();
+		if (config.useScript()) {
+			signals.set(context.getCallback(HiddenValueCallback.class)
+					.map(HiddenValueCallback::getValue)
+					.filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput))
+					.orElse(null));
+		} else {
+			context.getCallbacks(HiddenValueCallback.class).forEach(callback -> {
+				if (callback.getId().equals("pingone_risk_evaluation_signals")) {
+					signals.set(callback.getValue());
+				}
+			});
+		}
+		return signals.get();
 	}
+
+	private boolean callbackHasError(TreeContext context) {
+		AtomicBoolean hasError = new AtomicBoolean(false);
+		if (config.useScript()) {
+			HiddenValueCallback clientErrorCallback = context.getCallback(HiddenValueCallback.class).get();
+			Optional<String> clientError = Optional.ofNullable(clientErrorCallback.getValue());
+			if (clientError.isPresent()) {
+				logClientError(context, clientError.get());
+				hasError.set(true);
+			}
+		} else {
+			context.getCallbacks(HiddenValueCallback.class).forEach(callback -> {
+				if (callback.getId().equals("clientError") && StringUtils.isNotEmpty(callback.getValue())) {
+					logClientError(context, callback.getValue());
+					hasError.set(true);
+				}
+			});
+		}
+		return hasError.get();
+	}
+
+	private void logClientError(TreeContext context, String clientError) {
+		logger.error("{}Client error: {}", loggerPrefix, clientError);
+		context.getStateFor(this).putTransient(loggerPrefix + "ClientError", new Date() + ": " + clientError);
+	}
+
 
 	private Action getAction(String result) throws Exception {
 		switch (result) {
