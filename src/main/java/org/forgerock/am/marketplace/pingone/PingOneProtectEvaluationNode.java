@@ -404,9 +404,12 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 			}
 		} else {
 			context.getCallbacks(HiddenValueCallback.class).forEach(callback -> {
-				if (callback.getId().equals("clientError") && StringUtils.isNotEmpty(callback.getValue())) {
-					logClientError(context, callback.getValue());
-					hasError.set(true);
+				if (callback.getId().equals("clientError")) {
+					Optional<String> clientError = Optional.ofNullable(callback.getValue());
+					if (clientError.isPresent() && !clientError.get().equals("clientError")) {
+						logClientError(context, clientError.get());
+						hasError.set(true);
+					}
 				}
 			});
 		}
@@ -534,7 +537,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		} else {
 			JsonValue callbackData = JsonValue.json(JsonValue.object());
 			callbackData.put("_type", "PingOneProtect");
-			callbackData.put("_action", "protect_risk_evaluation");  // TODO check if it is evaluate or evaluation
+			callbackData.put("_action", "protect_risk_evaluation");
 			callbackData.put("envId", tntpPingOneConfig.environmentId());
 			callbackData.put("pauseBehavioralData", config.pauseBehavioralData());
 			callbacks.add(new MetadataCallback(callbackData));

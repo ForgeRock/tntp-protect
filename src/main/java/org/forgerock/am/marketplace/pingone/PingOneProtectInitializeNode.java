@@ -196,7 +196,7 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 				if (!config.useScript()) {
 					HiddenValueCallback clientErrorCallback = context.getCallback(HiddenValueCallback.class).get();
 					Optional<String> clientError = Optional.ofNullable(clientErrorCallback.getValue());
-					if (clientError.isPresent()) {
+					if (clientError.isPresent() && !clientError.get().equals("clientError")) {
 						logger.error(loggerPrefix + "Client error: " + clientError.get());
 						context.getStateFor(this).putTransient(loggerPrefix + "ClientError", new Date() + ": " + clientError.get());
 						return Action.goTo(ERROR).withHeader("Error occurred").withErrorMessage(clientError.get()).build();
@@ -240,7 +240,7 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 		initValues.put("envId", tntpPingOneConfig.environmentId());
 		initValues.put("consoleLogEnabled", config.consoleLogEnabled());
 		initValues.put("deviceAttributesToIgnore", config.deviceAttributesToIgnore());
-		initValues.put("customHost", config.customHost().orElse(null));
+		initValues.put("customHost", config.customHost().orElse(""));
 		initValues.put("lazyMetadata", config.lazyMetadata());
 		initValues.put("behavioralDataCollection", config.behavioralDataCollection());
 		initValues.put("deviceKeyRsyncIntervals", config.deviceKeyRsyncIntervals());
