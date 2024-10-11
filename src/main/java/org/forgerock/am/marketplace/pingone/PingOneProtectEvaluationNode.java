@@ -30,10 +30,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 
+import com.sun.identity.authentication.spi.MetadataCallback;
 import org.apache.commons.lang3.StringUtils;
 import org.forgerock.am.identity.application.LegacyIdentityService;
 import org.forgerock.http.handler.HttpClientHandler;
@@ -137,8 +140,6 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 
 	private final LegacyIdentityService identityService;
 	private final CoreWrapper coreWrapper;
-	// private final PingOneWorkerService pingOneWorkerService;
-	// private final PingOneProtectService pingOneProtectService;
 
 	private final Realm realm;
 
@@ -272,6 +273,15 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 			return false;
 		}
 
+		/**
+		 * Specify whether to return a script or metadata callback.
+		 *
+		 * @return {@literal true} if return as a script.
+		 */
+		@Attribute(order = 1300)
+		default boolean useScript() {
+			return true;
+		}
 	}
 
 	/**
@@ -299,12 +309,9 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		try {
 			if (context.hasCallbacks()) {
 
-				Optional<HiddenValueCallback> callback = context.getCallback(HiddenValueCallback.class);
-				Optional<String> signals = context.getCallback(HiddenValueCallback.class)
-						.map(HiddenValueCallback::getValue)
-						.filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput));
+				String signals = getSignalsFromCallback(context);
 
-				if (callbackHasError(callback)) {
+				if (callbackHasError(context)) {
 					return Action.goTo(ERROR).build();
 				}
 
@@ -314,7 +321,7 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 				NodeState state = context.getStateFor(this);
 
 				JsonValue result = evaluate(accessToken, tntpPingOneConfig,
-						getRequestBody(context, state, signals.orElse(null)));
+						getRequestBody(context, state, signals));
 
 				// Put information to sharedState so that the PingOneProtectResult will update
 				// the risk result.
@@ -354,10 +361,9 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 				if (result.get(RESULT).isDefined(LEVEL)) {
 					return getAction(result.get(RESULT).get(LEVEL).asString());
 				}
+
 				throw new IllegalArgumentException("Evaluation result is invalid" + result);
-
 			} else {
-
 				return getCallback();
 			}
 		} catch (Exception e) {
@@ -370,15 +376,51 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		}
 	}
 
-	private boolean callbackHasError(Optional<HiddenValueCallback> callback) {
-
-		// if (StringUtils.isNotEmpty(callback.get().getClientError())) {
-		// return Action.goTo(CLIENT_ERROR_OUTCOME_ID).build();
-		// }
-
-		// TODO
-		return false;
+	private String getSignalsFromCallback(TreeContext context) {
+		AtomicReference<String> signals = new AtomicReference<>();
+		if (config.useScript()) {
+			signals.set(context.getCallback(HiddenValueCallback.class)
+					.map(HiddenValueCallback::getValue)
+					.filter(scriptOutput -> !Strings.isNullOrEmpty(scriptOutput))
+					.orElse(null));
+		} else {
+			context.getCallbacks(HiddenValueCallback.class).forEach(callback -> {
+				if (callback.getId().equals("pingone_risk_evaluation_signals")) {
+					signals.set(callback.getValue());
+				}
+			});
+		}
+		return signals.get();
 	}
+
+	private boolean callbackHasError(TreeContext context) {
+		AtomicBoolean hasError = new AtomicBoolean(false);
+		if (config.useScript()) {
+			HiddenValueCallback clientErrorCallback = context.getCallback(HiddenValueCallback.class).get();
+			Optional<String> clientError = Optional.ofNullable(clientErrorCallback.getValue());
+			if (clientError.isPresent()) {
+				logClientError(context, clientError.get());
+				hasError.set(true);
+			}
+		} else {
+			context.getCallbacks(HiddenValueCallback.class).forEach(callback -> {
+				if (callback.getId().equals("clientError")) {
+					Optional<String> clientError = Optional.ofNullable(callback.getValue());
+					if (clientError.isPresent() && !clientError.get().equals("clientError")) {
+						logClientError(context, clientError.get());
+						hasError.set(true);
+					}
+				}
+			});
+		}
+		return hasError.get();
+	}
+
+	private void logClientError(TreeContext context, String clientError) {
+		logger.error("{}Client error: {}", loggerPrefix, clientError);
+		context.getStateFor(this).putTransient(loggerPrefix + "ClientError", new Date() + ": " + clientError);
+	}
+
 
 	private Action getAction(String result) throws Exception {
 		switch (result) {
@@ -488,8 +530,20 @@ public class PingOneProtectEvaluationNode extends SingleOutcomeNode {
 		String clientScript = ScriptHelper.readJS(ScriptHelper.sdkJsPathSigTemplate);
 
 		List<Callback> callbacks = new ArrayList<>();
-		callbacks.add(ScriptHelper.getSigCallback(clientScript));
-		callbacks.add(new HiddenValueCallback("clientScriptOutputData"));
+
+		if (config.useScript()) {
+			callbacks.add(ScriptHelper.getSigCallback(clientScript));
+			callbacks.add(new HiddenValueCallback("clientScriptOutputData"));
+		} else {
+			JsonValue callbackData = JsonValue.json(JsonValue.object());
+			callbackData.put("_type", "PingOneProtect");
+			callbackData.put("_action", "protect_risk_evaluation");
+			callbackData.put("envId", tntpPingOneConfig.environmentId());
+			callbackData.put("pauseBehavioralData", config.pauseBehavioralData());
+			callbacks.add(new MetadataCallback(callbackData));
+			callbacks.add(new HiddenValueCallback("pingone_risk_evaluation_signals", ""));
+			callbacks.add(new HiddenValueCallback("clientError", ""));
+		}
 
 		return Action.send(callbacks).build();
 	}

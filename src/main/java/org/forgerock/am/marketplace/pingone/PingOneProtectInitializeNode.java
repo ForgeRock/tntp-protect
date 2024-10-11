@@ -19,6 +19,8 @@ import java.util.ResourceBundle;
 import javax.inject.Inject;
 import javax.security.auth.callback.Callback;
 
+import com.sun.identity.authentication.callbacks.HiddenValueCallback;
+import com.sun.identity.authentication.spi.MetadataCallback;
 import org.forgerock.json.JsonValue;
 import org.forgerock.openam.annotations.sm.Attribute;
 import org.forgerock.openam.auth.node.api.AbstractDecisionNode;
@@ -161,6 +163,16 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 		default boolean disableTags() {
 			return false;
 		}
+		
+		/**
+		 * Specify whether to return a script or metadata callback.
+		 *
+		 * @return {@literal true} if return as a script.
+		 */
+		@Attribute(order = 1200)
+		default boolean useScript() {
+			return true;
+		}
 
 	}
 
@@ -180,6 +192,17 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 	public Action process(TreeContext context) throws NodeProcessException {
 		try {
 			if (context.hasCallbacks()) {
+
+				if (!config.useScript()) {
+					HiddenValueCallback clientErrorCallback = context.getCallback(HiddenValueCallback.class).get();
+					Optional<String> clientError = Optional.ofNullable(clientErrorCallback.getValue());
+					if (clientError.isPresent() && !clientError.get().equals("clientError")) {
+						logger.error(loggerPrefix + "Client error: " + clientError.get());
+						context.getStateFor(this).putTransient(loggerPrefix + "ClientError", new Date() + ": " + clientError.get());
+						return Action.goTo(ERROR).withHeader("Error occurred").withErrorMessage(clientError.get()).build();
+					}
+				}
+
 				return Action.goTo(NEXT).build();
 			} else {
 				return getCallback();
@@ -198,19 +221,34 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 		String clientScript = ScriptHelper.readJS(ScriptHelper.sdkJsPathTemplate);
 
 		List<Callback> callbacks = new ArrayList<>();
-		callbacks.add(ScriptHelper.getScriptedCallback(clientScript, tntpPingOneConfig.environmentId(),
-				String.valueOf(config.consoleLogEnabled()), 
-				config.deviceAttributesToIgnore().toString(),
-				config.customHost().orElse(null), 
-				String.valueOf(config.lazyMetadata()),
-				String.valueOf(config.behavioralDataCollection()), 
-				String.valueOf(config.deviceKeyRsyncIntervals()),
-				String.valueOf(config.enableTrust()), 
-				String.valueOf(config.disableTags()),
-				String.valueOf(config.disableHub()), 
-				String.valueOf(config.sdkUrl())));
+
+		if (config.useScript()) {
+			callbacks.add(ScriptHelper.getScriptedCallback(clientScript, getInitValues()));
+		} else {
+			JsonValue initValues = getInitValues();
+			initValues.put("_type", "PingOneProtect");
+			initValues.put("_action", "protect_initialize");
+			callbacks.add(new MetadataCallback(initValues));
+			callbacks.add(new HiddenValueCallback("clientError", ""));
+		}
 
 		return Action.send(callbacks).build();
+	}
+
+	private JsonValue getInitValues() {
+		JsonValue initValues = JsonValue.json(JsonValue.object());
+		initValues.put("envId", tntpPingOneConfig.environmentId());
+		initValues.put("consoleLogEnabled", config.consoleLogEnabled());
+		initValues.put("deviceAttributesToIgnore", config.deviceAttributesToIgnore());
+		initValues.put("customHost", config.customHost().orElse(""));
+		initValues.put("lazyMetadata", config.lazyMetadata());
+		initValues.put("behavioralDataCollection", config.behavioralDataCollection());
+		initValues.put("deviceKeyRsyncIntervals", config.deviceKeyRsyncIntervals());
+		initValues.put("enableTrust", config.enableTrust());
+		initValues.put("disableTags", config.disableTags());
+		initValues.put("disableHub", config.disableHub());
+		initValues.put("sdkUrl", config.sdkUrl());
+		return initValues;
 	}
 
 	/**
