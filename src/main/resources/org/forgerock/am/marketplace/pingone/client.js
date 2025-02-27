@@ -9,7 +9,7 @@
 var body = document.body;
 var script = document.createElement('script');
 script.type = 'text/javascript';
-script.src = "${theUrl}";
+script.src = "${sdkUrl}";
 script.setAttribute('defer', 'defer');
 
 if (typeof window._pingOneSignals === 'function') {
