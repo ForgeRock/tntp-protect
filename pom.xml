@@ -15,7 +15,7 @@
     <artifactId>TNTPPingOneProtect</artifactId>
 
     <groupId>org.forgerock.am.marketplace</groupId>
-    <version>1.0.0</version>    
+    <version>1.0.1</version>    
     <name>PingOne Protect</name>
     <description>PingOne Protect Nodes</description>
 
