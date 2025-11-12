@@ -2,7 +2,18 @@
                                                 <a href="/confluence/pages/viewpage.action?pageId=174753324">PingOne Protect Node &amp; SDK (Latest)</a>
                                     </h1>
 
-
+> **⚠️ Important Notice:**
+>
+> This marketplace node is **deprecated** as of PingAM 7.5.0.
+>
+> Customers wishing to integrate with PingOne Protect in PingAM \> 7.5.0 are strongly encouraged to use the officially provided engineering nodes for this.
+>
+> Please refer to the following documentation for up-to-date information on these nodes and associated services:
+> - [Getting Started with PingOne Protect](https://docs.pingidentity.com/pingone/threat_protection_using_pingone_protect/p1_protect_getting_started.html)
+> - [PingOne Protect Initialize Node](https://docs.pingidentity.com/bundle/pingone-protect/page/p1p-init-node.html)
+> - [PingOne Protect Evaluation Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-evaluation.html)
+> - [PingOne Protect Result Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-result.html)
+>
 
 <table class="wrapped confluenceTable tablesorter tablesorter-default stickyTableHeaders" role="grid" style="padding: 0px;" resolved=""><colgroup><col><col></colgroup><thead class="tableFloatingHeaderOriginal" style="position: static; margin-top: 0px; left: 325px; z-index: 3; width: 983px; top: 91px;"><tr role="row" class="tablesorter-headerRow"><th scope="col" class="confluenceTh tablesorter-header sortableHeader tablesorter-headerUnSorted" data-column="0" tabindex="0" role="columnheader" aria-disabled="false" unselectable="on" aria-sort="none" aria-label="Component: No sort applied, activate to apply an ascending sort" style="user-select: none; min-width: 8px; max-width: none;"><div class="tablesorter-header-inner">Component</div></th><th scope="col" class="confluenceTh tablesorter-header sortableHeader tablesorter-headerUnSorted" data-column="1" tabindex="0" role="columnheader" aria-disabled="false" unselectable="on" aria-sort="none" aria-label="Description: No sort applied, activate to apply an ascending sort" style="user-select: none; min-width: 8px; max-width: none;"><div class="tablesorter-header-inner"></div>Description</th></tr></thead><tbody aria-live="polite" aria-relevant="all"><tr role="row"><td class="confluenceTd">PingOne Risk Initialize Node</td><td class="confluenceTd">Provide Signal SDK configuration attribute, and instruct the client to initialize the Signal SDK.</td></tr><tr role="row"><td class="confluenceTd">PingOne Risk Evaluation Node</td><td class="confluenceTd">Handle requests and responses from clients, analyze risk results, and route to outcome.&nbsp;</td></tr><tr role="row"><td class="confluenceTd">PingOne Risk Result Node</td><td class="confluenceTd">Update evaluation authentication status.</td></tr><tr role="row"><td class="confluenceTd">PingOne Worker Service</td><td class="confluenceTd"><p>Manage PingOne AccessToken, Client Credential OAuth2 Request to PingOne Platform, and cache the AccessToken.</p><p>This component can be reused by other PingOne integrations. For example, PingOne Verify.</p></td></tr><tr role="row"><td class="confluenceTd">PingOne Protect Service</td><td class="confluenceTd">As API Client to PingOne Protect APIs.</td></tr></tbody></table>
 
