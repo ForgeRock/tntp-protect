@@ -208,7 +208,7 @@ public class PingOneProtectInitializeNode extends AbstractDecisionNode {
 				return getCallback();
 			}
 		} catch (Exception e) {
-			String stackTrace = org.apache.commons.lang.exception.ExceptionUtils.getStackTrace(e);
+			String stackTrace = org.apache.commons.lang3.exception.ExceptionUtils.getStackTrace(e);
 			logger.error(loggerPrefix + "Exception occurred: " + stackTrace);
 			context.getStateFor(this).putTransient(loggerPrefix + "Exception", new Date() + ": " + e.getMessage());
 			context.getStateFor(this).putTransient(loggerPrefix + "StackTrace", new Date() + ": " + stackTrace);
