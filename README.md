@@ -10,7 +10,7 @@
 >
 > Please refer to the following documentation for up-to-date information on these nodes and associated services:
 > - [Getting Started with PingOne Protect](https://docs.pingidentity.com/pingone/threat_protection_using_pingone_protect/p1_protect_getting_started.html)
-> - [PingOne Protect Initialize Node](https://docs.pingidentity.com/bundle/pingone-protect/page/p1p-init-node.html)
+> - [PingOne Protect Initialize Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-initialize.html)
 > - [PingOne Protect Evaluation Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-evaluation.html)
 > - [PingOne Protect Result Node](https://docs.pingidentity.com/auth-node-ref/latest/pingone/pingone-protect-result.html)
 >
